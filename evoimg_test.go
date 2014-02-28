@@ -26,3 +26,21 @@ func TestTreeShake(t *testing.T) {
 		}
 	}
 }
+
+func TestEvalNode(t *testing.T) {
+	e, _ := Read("[+ 1 2; x; y]")
+	for x := 0.1; x < 1.0; x += .1 {
+		if e.EvalNode(1, x, .5) != x {
+			t.Errorf("Node 1 in '%s' should eval to %g", e.String(), x)
+		}
+		if e.EvalNode(2, 0, x) != x {
+			t.Errorf("Node 2 in '%s' should eval to %g", e.String(), x)
+		}
+	}
+	e, _ = Read("[blur 1; band 2; x]")
+	for y := 0.1; y < 1.0; y += .1 {
+		if v := e.EvalNode(1, .5, y); v != 1.0 {
+			t.Errorf("Node 1 in '%s' should eval to %g (evals to %g)", e.String(), 1.0, v)
+		}
+	}
+}

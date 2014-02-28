@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 	Xor
 	Not
 	If
+	Blur
 )
 
 const MAX_ARGS = 10
@@ -37,28 +39,30 @@ const MAX_ARGS = 10
 type OpInfo struct {
 	Name  string
 	Nargs int
+	Neigh bool
 }
 
 var OperatorInfo = map[int]OpInfo{
-	Const: {"=", 1},
-	Id:    {"id", 1},
-	X:     {"x", 0},
-	Y:     {"y", 0},
-	R:     {"r", 0},
-	T:     {"t", 0},
-	Cos:   {"cos", 1},
-	Sin:   {"sin", 1},
-	Sum:   {"+", 2},
-	Mult:  {"*", 2},
-	Lerp:  {"lerp", 3},
-	Inv:   {"inv", 1},
-	Band:  {"band", 1},
-	Bw:    {"bw", 1},
-	And:   {"and", 2},
-	Or:    {"or", 2},
-	Xor:   {"xor", 2},
-	Not:   {"not", 1},
-	If:    {"if", 3},
+	Const: {"=", 1, false},
+	Id:    {"id", 1, false},
+	X:     {"x", 0, false},
+	Y:     {"y", 0, false},
+	R:     {"r", 0, false},
+	T:     {"t", 0, false},
+	Cos:   {"cos", 1, false},
+	Sin:   {"sin", 1, false},
+	Sum:   {"+", 2, false},
+	Mult:  {"*", 2, false},
+	Lerp:  {"lerp", 3, false},
+	Inv:   {"inv", 1, false},
+	Band:  {"band", 1, false},
+	Bw:    {"bw", 1, false},
+	And:   {"and", 2, false},
+	Or:    {"or", 2, false},
+	Xor:   {"xor", 2, false},
+	Not:   {"not", 1, false},
+	If:    {"if", 3, false},
+	Blur:  {"blur", 1, true},
 }
 
 var Ids = map[string]int{}
@@ -266,22 +270,63 @@ func (node *Node) eval(x, y float64, args []float64) float64 {
 		} else {
 			return args[2]
 		}
+	default:
+		panic("not implemented")
 	}
-	return 0.0
 }
 
-func (E Expression) Eval(x, y float64) Color {
-	values := make([]float64, E.Size())
+const BLUR_SAMPLES = 3
+const BLUR_RADIUS = 0.05
 
-	args := make([]float64, MAX_ARGS)
-	for i := E.Size() - 1; i >= 0; i-- {
-		node := E[i]
-		for i, arg := range node.Args {
-			args[i] = values[arg]
+func (node *Node) evalNeigh(E Expression, x, y float64, args []float64) float64 {
+	switch node.Op {
+	case Blur:
+		v := 0.0
+		d := float64(BLUR_RADIUS) / float64(BLUR_SAMPLES)
+		for i := 0; i < BLUR_SAMPLES; i++ {
+			for j := 0; j < BLUR_SAMPLES; j++ {
+				dx := float64(i) * d + d/2 * rand.Float64()
+				dy := float64(j) * d + d/2 * rand.Float64()
+				v += E.EvalNode(node.Args[0], x + dx, y + dy)
+			}
 		}
-		values[i] = node.eval(x, y, args)
+		return v / float64(BLUR_SAMPLES * BLUR_SAMPLES)
+		
+	default:
+		panic("not implemented")
 	}
-	return Color{values[0], values[1], values[2]}
+}
+
+func (E Expression) EvalNode(root int, x, y float64) float64 {
+	// Select nodes that we will compute
+	selected := make([]int, len(E))
+	selected[0] = root
+	top := 1
+	for i := 0; i < top; i++ {
+		node := E[selected[i]]
+		for _, arg := range node.Args {
+			selected[top] = arg
+			top++
+		}
+	}
+	values := make([]float64, len(E))
+	args := make([]float64, MAX_ARGS)
+	for i := top - 1; i >= 0; i-- {
+		node := E[selected[i]]
+		for j, arg := range node.Args {
+			args[j] = values[arg]
+		}
+		if OperatorInfo[node.Op].Neigh {
+			values[selected[i]] = node.evalNeigh(E, x, y, args)
+		} else {
+			values[selected[i]] = node.eval(x, y, args)
+		}
+	}
+	return values[root]
+}
+
+func (E Expression) Eval(x, y float64) float64 {
+	return E.EvalNode(0, x, y)
 }
 
 func Map(x float64) (y float64) {
@@ -296,31 +341,44 @@ func Map(x float64) (y float64) {
 }
 
 func (E Expression) Render(size, samples int) image.Image {
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	var wg sync.WaitGroup
+	img := NewImage(size, size)
+	wg.Add(size)
 	for i := 0; i < size; i++ {
-		for j := 0; j < size; j++ {
-			c := Color{0, 0, 0}
-			for k := 0; k < samples; k++ {
-				dx := .5 + .4*rand.Float64()
-				dy := .5 + .4*rand.Float64()
-				x := (float64(i) + dx) / float64(size)
-				y := (float64(size-1-j) + dy) / float64(size)
-				rgb := E.Eval(x, y)
-				c.R += rgb.R
-				c.G += rgb.G
-				c.B += rgb.B
+		go func(i int) {
+			for j := 0; j < size; j++ {
+				c := Color{0, 0, 0}
+				if samples == 1 {
+					x := float64(i) / float64(size-1)
+					y := float64(size-1-j) / float64(size-1)
+					v := E.Eval(x, y)
+					c = Color{v, v, v}
+				} else {
+					for k := 0; k < samples; k++ {
+						dx := .5 + .4*rand.Float64()
+						dy := .5 + .4*rand.Float64()
+						x := (float64(i) + dx) / float64(size)
+						y := (float64(size-1-j) + dy) / float64(size)
+						rgb := E.Eval(x, y)
+						c.R += rgb
+						c.G += rgb
+						c.B += rgb
+					}
+					c.R /= float64(samples)
+					c.G /= float64(samples)
+					c.B /= float64(samples)
+				}
+				img.px[i][j] = color.RGBA{
+					uint8(Map(c.R) * 255.0),
+					uint8(Map(c.G) * 255.0),
+					uint8(Map(c.B) * 255.0),
+					255,
+				}
 			}
-			c.R /= float64(samples)
-			c.G /= float64(samples)
-			c.B /= float64(samples)
-			img.SetRGBA(i, j, color.RGBA{
-				uint8(Map(c.R) * 255.0),
-				uint8(Map(c.G) * 255.0),
-				uint8(Map(c.B) * 255.0),
-				255,
-			})
-		}
+			wg.Done()
+		} (i)
 	}
+	wg.Wait()
 	return img
 }
 
@@ -396,4 +454,23 @@ func Read(s string) (expr Expression, err error) {
 		expr = append(expr, node)
 	}
 	return expr.TreeShake(0), nil
+}
+
+// Image
+
+type Image struct {
+	h, w int
+	px   [][]color.RGBA
+}
+
+func (I *Image) At(x, y int) color.Color { return I.px[x][y] }
+func (I *Image) ColorModel() color.Model { return color.RGBAModel }
+func (I *Image) Bounds() image.Rectangle { return image.Rect(0, 0, I.h, I.w) }
+
+func NewImage(h, w int) *Image {
+	px := make([][]color.RGBA, h)
+	for i := range px {
+		px[i] = make([]color.RGBA, w)
+	}
+	return &Image{h, w, px}
 }

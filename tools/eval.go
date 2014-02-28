@@ -6,7 +6,7 @@ import (
 	eimg "go-evoimage"
 	"image/png"
 	"os"
-	// "runtime"
+	"runtime"
 )
 
 var (
@@ -15,7 +15,7 @@ var (
 )
 
 func main() {
-	// runtime.GOMAXPROCS(runtime.NumCPU())
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.IntVar(&Size, "s", 500, "Image size")
 	flag.IntVar(&Samples, "k", 4, "Image size")
 	flag.Parse()
