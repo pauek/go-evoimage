@@ -163,6 +163,9 @@ func (E Expression) TopologicalSort() {
 
 func (E Expression) TreeShake(roots ...int) Expression {
 	sz := len(E)
+	if sz == 0 {
+		return Expression{}
+	}
 	order := make([]int, sz+1)
 	for i := range order {
 		order[i] = -1
@@ -392,5 +395,5 @@ func Read(s string) (expr Expression, err error) {
 		}
 		expr = append(expr, node)
 	}
-	return expr.TreeShake(), nil
+	return expr.TreeShake(0), nil
 }
