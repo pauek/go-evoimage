@@ -62,7 +62,7 @@ var OperatorInfo = map[int]OpInfo{
 	Xor:   {"xor", 2, false},
 	Not:   {"not", 1, false},
 	If:    {"if", 3, false},
-	Blur:  {"blur", 1, true},
+	Blur:  {"blur", 2, true},  // (blur <img> <blur-radius>)
 }
 
 var Ids = map[string]int{}
@@ -276,15 +276,16 @@ func (node *Node) eval(x, y float64, args []float64) float64 {
 }
 
 const BLUR_SAMPLES = 5
-const BLUR_RADIUS = 0.05
+const MAX_BLUR_RADIUS = 0.05
 
 func (node *Node) evalNeigh(E Expression, x, y float64, args []float64) float64 {
 	switch node.Op {
 	case Blur:
 		v := 0.0
+		radius := MAX_BLUR_RADIUS * args[1]
 		for i := 0; i < BLUR_SAMPLES; i++ {
-			dx := BLUR_RADIUS * (2.0 * rand.Float64() - 1.0)
-			dy := BLUR_RADIUS * (2.0 * rand.Float64() - 1.0)
+			dx := radius * (2.0 * rand.Float64() - 1.0)
+			dy := radius * (2.0 * rand.Float64() - 1.0)
 			v += E.EvalNode(node.Args[0], x + dx, y + dy)
 		}
 		return v / float64(BLUR_SAMPLES)
@@ -338,15 +339,17 @@ func Map(x float64) (y float64) {
 }
 
 func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) float64 {
-	xsz := xhigh - xlow
-	ysz := yhigh - ylow
+	xsz := (xhigh - xlow) / float64(samples)
+	ysz := (yhigh - ylow) / float64(samples)
 	var v float64
-	for k := 0; k < samples; k++ {
-		dx := xsz * rand.Float64()
-		dy := ysz * rand.Float64()
-		v += E.Eval(xlow + dx, ylow + dy)
+	for i := 0; i < samples; i++ {
+		for j := 0; j < samples; j++ {
+			x := xlow + float64(i)*xsz + xsz*rand.Float64()
+			y := ylow + float64(j)*ysz + ysz*rand.Float64()
+			v += E.Eval(x, y)
+		}
 	}
-	return v / float64(samples)
+	return v / float64(samples*samples)
 }
 
 func (E Expression) Render(size, samples int) image.Image {
