@@ -275,22 +275,19 @@ func (node *Node) eval(x, y float64, args []float64) float64 {
 	}
 }
 
-const BLUR_SAMPLES = 3
+const BLUR_SAMPLES = 5
 const BLUR_RADIUS = 0.05
 
 func (node *Node) evalNeigh(E Expression, x, y float64, args []float64) float64 {
 	switch node.Op {
 	case Blur:
 		v := 0.0
-		d := float64(BLUR_RADIUS) / float64(BLUR_SAMPLES)
 		for i := 0; i < BLUR_SAMPLES; i++ {
-			for j := 0; j < BLUR_SAMPLES; j++ {
-				dx := float64(i) * d + d/2 * rand.Float64()
-				dy := float64(j) * d + d/2 * rand.Float64()
-				v += E.EvalNode(node.Args[0], x + dx, y + dy)
-			}
+			dx := BLUR_RADIUS * (2.0 * rand.Float64() - 1.0)
+			dy := BLUR_RADIUS * (2.0 * rand.Float64() - 1.0)
+			v += E.EvalNode(node.Args[0], x + dx, y + dy)
 		}
-		return v / float64(BLUR_SAMPLES * BLUR_SAMPLES)
+		return v / float64(BLUR_SAMPLES)
 		
 	default:
 		panic("not implemented")
@@ -340,6 +337,18 @@ func Map(x float64) (y float64) {
 	return
 }
 
+func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) float64 {
+	xsz := xhigh - xlow
+	ysz := yhigh - ylow
+	var v float64
+	for k := 0; k < samples; k++ {
+		dx := xsz * rand.Float64()
+		dy := ysz * rand.Float64()
+		v += E.Eval(xlow + dx, ylow + dy)
+	}
+	return v / float64(samples)
+}
+
 func (E Expression) Render(size, samples int) image.Image {
 	var wg sync.WaitGroup
 	img := NewImage(size, size)
@@ -347,31 +356,15 @@ func (E Expression) Render(size, samples int) image.Image {
 	for i := 0; i < size; i++ {
 		go func(i int) {
 			for j := 0; j < size; j++ {
-				c := Color{0, 0, 0}
-				if samples == 1 {
-					x := float64(i) / float64(size-1)
-					y := float64(size-1-j) / float64(size-1)
-					v := E.Eval(x, y)
-					c = Color{v, v, v}
-				} else {
-					for k := 0; k < samples; k++ {
-						dx := .5 + .4*rand.Float64()
-						dy := .5 + .4*rand.Float64()
-						x := (float64(i) + dx) / float64(size)
-						y := (float64(size-1-j) + dy) / float64(size)
-						rgb := E.Eval(x, y)
-						c.R += rgb
-						c.G += rgb
-						c.B += rgb
-					}
-					c.R /= float64(samples)
-					c.G /= float64(samples)
-					c.B /= float64(samples)
-				}
+				xlow := float64(i) / float64(size)
+				xhigh := float64(i+1) / float64(size)
+				ylow := float64(j) / float64(size)
+				yhigh := float64(j+1) / float64(size)
+				v := E.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
 				img.px[i][j] = color.RGBA{
-					uint8(Map(c.R) * 255.0),
-					uint8(Map(c.G) * 255.0),
-					uint8(Map(c.B) * 255.0),
+					uint8(Map(v) * 255.0),
+					uint8(Map(v) * 255.0),
+					uint8(Map(v) * 255.0),
 					255,
 				}
 			}

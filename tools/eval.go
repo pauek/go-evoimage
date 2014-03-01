@@ -17,8 +17,9 @@ var (
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.IntVar(&Size, "s", 500, "Image size")
-	flag.IntVar(&Samples, "k", 4, "Image size")
+	flag.IntVar(&Samples, "k", 1, "Image size")
 	flag.Parse()
+
 	args := flag.Args()
 	e, err := eimg.Read(args[0])
 	if err != nil {
