@@ -12,26 +12,34 @@ import (
 )
 
 const (
+	// sources
 	Const = iota
-	Id
 	X
 	Y
 	R
 	T
+
+	// unary
+	Id
 	Sin
 	Cos
-	Sum
-	Mult
-	Lerp
 	Inv
 	Band
 	Bw
+	Not
+
+	// binary
+	Sum
+	Mult
 	And
 	Or
 	Xor
-	Not
-	If
 	Blur
+
+	// ternary
+	Lerp
+	If
+	Map
 )
 
 const MAX_ARGS = 10
@@ -39,30 +47,33 @@ const MAX_ARGS = 10
 type OpInfo struct {
 	Name  string
 	Nargs int
-	Neigh bool
 }
 
 var OperatorInfo = map[int]OpInfo{
-	Const: {"=", 1, false},
-	Id:    {"id", 1, false},
-	X:     {"x", 0, false},
-	Y:     {"y", 0, false},
-	R:     {"r", 0, false},
-	T:     {"t", 0, false},
-	Cos:   {"cos", 1, false},
-	Sin:   {"sin", 1, false},
-	Sum:   {"+", 2, false},
-	Mult:  {"*", 2, false},
-	Lerp:  {"lerp", 3, false},
-	Inv:   {"inv", 1, false},
-	Band:  {"band", 1, false},
-	Bw:    {"bw", 1, false},
-	And:   {"and", 2, false},
-	Or:    {"or", 2, false},
-	Xor:   {"xor", 2, false},
-	Not:   {"not", 1, false},
-	If:    {"if", 3, false},
-	Blur:  {"blur", 2, true},  // (blur <img> <blur-radius>)
+	Const: {"=", 1},
+	X:     {"x", 0},
+	Y:     {"y", 0},
+	R:     {"r", 0},
+	T:     {"t", 0},
+
+	Id:    {"id", 1},
+	Cos:   {"cos", 1},
+	Sin:   {"sin", 1},
+	Inv:   {"inv", 1},
+	Band:  {"band", 1},
+	Bw:    {"bw", 1},
+	Not:   {"not", 1},
+
+	Sum:   {"+", 2},
+	Mult:  {"*", 2},
+	And:   {"and", 2},
+	Or:    {"or", 2},
+	Xor:   {"xor", 2},
+	Blur:  {"blur", 2},  // (blur <img> <blur-radius>)
+
+	Lerp:  {"lerp", 3},
+	If:    {"if", 3},
+	Map:   {"map", 3},
 }
 
 var Ids = map[string]int{}
@@ -199,7 +210,7 @@ func (E Expression) TreeShake(roots ...int) Expression {
 	return newE
 }
 
-func (node *Node) eval(x, y float64, args []float64) float64 {
+func (node *Node) eval(E Expression, x, y float64, args []float64) float64 {
 	switch node.Op {
 	case Const:
 		return node.Const
@@ -270,16 +281,6 @@ func (node *Node) eval(x, y float64, args []float64) float64 {
 		} else {
 			return args[2]
 		}
-	default:
-		panic("not implemented")
-	}
-}
-
-const BLUR_SAMPLES = 5
-const MAX_BLUR_RADIUS = 0.05
-
-func (node *Node) evalNeigh(E Expression, x, y float64, args []float64) float64 {
-	switch node.Op {
 	case Blur:
 		v := 0.0
 		radius := MAX_BLUR_RADIUS * args[1]
@@ -289,11 +290,18 @@ func (node *Node) evalNeigh(E Expression, x, y float64, args []float64) float64 
 			v += E.EvalNode(node.Args[0], x + dx, y + dy)
 		}
 		return v / float64(BLUR_SAMPLES)
+
+	case Map:
+		_x, _y := args[1], args[2]
+		return E.EvalNode(node.Args[0], _x, _y)
 		
 	default:
 		panic("not implemented")
 	}
 }
+
+const BLUR_SAMPLES = 5
+const MAX_BLUR_RADIUS = 0.05
 
 func (E Expression) EvalNode(root int, x, y float64) float64 {
 	// Select nodes that we will compute
@@ -314,11 +322,7 @@ func (E Expression) EvalNode(root int, x, y float64) float64 {
 		for j, arg := range node.Args {
 			args[j] = values[arg]
 		}
-		if OperatorInfo[node.Op].Neigh {
-			values[selected[i]] = node.evalNeigh(E, x, y, args)
-		} else {
-			values[selected[i]] = node.eval(x, y, args)
-		}
+		values[selected[i]] = node.eval(E, x, y, args)
 	}
 	return values[root]
 }
@@ -327,7 +331,7 @@ func (E Expression) Eval(x, y float64) float64 {
 	return E.EvalNode(0, x, y)
 }
 
-func Map(x float64) (y float64) {
+func _map(x float64) (y float64) {
 	y = x
 	if y > 1.0 {
 		y = 1.0
@@ -342,9 +346,9 @@ func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) f
 	xsz := (xhigh - xlow) / float64(samples)
 	ysz := (yhigh - ylow) / float64(samples)
 	S := make([]float64, samples * 2)
-	for i := 0; i < len(S); i += 2 {
-		S[i  ] = xlow + float64(i)*xsz + xsz*rand.Float64()
-		S[i+1] = ylow + float64(i)*ysz + ysz*rand.Float64()
+	for i := 0; i < samples; i++ {
+		S[i*2  ] = xlow + float64(i)*xsz + xsz*rand.Float64()
+		S[i*2+1] = ylow + float64(i)*ysz + ysz*rand.Float64()
 	}
 	for dim := 0; dim < 2; dim++ {
 		for i := 0; i < samples; i++ {
@@ -372,9 +376,9 @@ func (E Expression) Render(size, samples int) image.Image {
 				yhigh := float64(j+1) / float64(size)
 				v := E.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
 				img.px[i][j] = color.RGBA{
-					uint8(Map(v) * 255.0),
-					uint8(Map(v) * 255.0),
-					uint8(Map(v) * 255.0),
+					uint8(_map(v) * 255.0),
+					uint8(_map(v) * 255.0),
+					uint8(_map(v) * 255.0),
 					255,
 				}
 			}
