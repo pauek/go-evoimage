@@ -341,15 +341,22 @@ func Map(x float64) (y float64) {
 func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) float64 {
 	xsz := (xhigh - xlow) / float64(samples)
 	ysz := (yhigh - ylow) / float64(samples)
-	var v float64
-	for i := 0; i < samples; i++ {
-		for j := 0; j < samples; j++ {
-			x := xlow + float64(i)*xsz + xsz*rand.Float64()
-			y := ylow + float64(j)*ysz + ysz*rand.Float64()
-			v += E.Eval(x, y)
+	S := make([]float64, samples * 2)
+	for i := 0; i < len(S); i += 2 {
+		S[i  ] = xlow + float64(i)*xsz + xsz*rand.Float64()
+		S[i+1] = ylow + float64(i)*ysz + ysz*rand.Float64()
+	}
+	for dim := 0; dim < 2; dim++ {
+		for i := 0; i < samples; i++ {
+			_i := rand.Intn(samples)
+			S[i*2 + dim], S[_i*2 + dim] = S[_i*2 + dim], S[i*2 +dim]
 		}
 	}
-	return v / float64(samples*samples)
+	var v float64
+	for i := 0; i < len(S); i += 2 {
+		v += E.Eval(S[i], S[i+1])
+	}
+	return v / float64(samples)
 }
 
 func (E Expression) Render(size, samples int) image.Image {
