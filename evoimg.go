@@ -56,24 +56,24 @@ var OperatorInfo = map[int]OpInfo{
 	R:     {"r", 0},
 	T:     {"t", 0},
 
-	Id:    {"id", 1},
-	Cos:   {"cos", 1},
-	Sin:   {"sin", 1},
-	Inv:   {"inv", 1},
-	Band:  {"band", 1},
-	Bw:    {"bw", 1},
-	Not:   {"not", 1},
+	Id:   {"id", 1},
+	Cos:  {"cos", 1},
+	Sin:  {"sin", 1},
+	Inv:  {"inv", 1},
+	Band: {"band", 1},
+	Bw:   {"bw", 1},
+	Not:  {"not", 1},
 
-	Sum:   {"+", 2},
-	Mult:  {"*", 2},
-	And:   {"and", 2},
-	Or:    {"or", 2},
-	Xor:   {"xor", 2},
-	Blur:  {"blur", 2},  // (blur <img> <blur-radius>)
+	Sum:  {"+", 2},
+	Mult: {"*", 2},
+	And:  {"and", 2},
+	Or:   {"or", 2},
+	Xor:  {"xor", 2},
+	Blur: {"blur", 2}, // (blur <img> <blur-radius>)
 
-	Lerp:  {"lerp", 3},
-	If:    {"if", 3},
-	Map:   {"map", 3},
+	Lerp: {"lerp", 3},
+	If:   {"if", 3},
+	Map:  {"map", 3},
 }
 
 var Ids = map[string]int{}
@@ -345,15 +345,15 @@ func _map(x float64) (y float64) {
 func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) float64 {
 	xsz := (xhigh - xlow) / float64(samples)
 	ysz := (yhigh - ylow) / float64(samples)
-	S := make([]float64, samples * 2)
+	S := make([]float64, samples*2)
 	for i := 0; i < samples; i++ {
-		S[i*2  ] = xlow + float64(i)*xsz + xsz*rand.Float64()
+		S[i*2] = xlow + float64(i)*xsz + xsz*rand.Float64()
 		S[i*2+1] = ylow + float64(i)*ysz + ysz*rand.Float64()
 	}
 	for dim := 0; dim < 2; dim++ {
 		for i := 0; i < samples; i++ {
 			_i := rand.Intn(samples)
-			S[i*2 + dim], S[_i*2 + dim] = S[_i*2 + dim], S[i*2 +dim]
+			S[i*2+dim], S[_i*2+dim] = S[_i*2+dim], S[i*2+dim]
 		}
 	}
 	var v float64
