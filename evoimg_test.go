@@ -18,7 +18,8 @@ func TestTreeShake(t *testing.T) {
 		{"[rg: x; x; b: y]", "[rg: x; b: y]"},
 		{"[r: x; g: r; b: y]", "[r: x; g: r; b: y]"},
 		{"[= 1; = 2; = 3]", "[rgb: = 1]"},
-		{"[rgb: lerp 1 2 3; inv 2; x; band 4; y]", "[rgb: lerp 1 2 3; inv 2; x; band 4; y]"},
+		{"[rgb: lerp 1 2 3; inv 2; x; band 4; y]", "[rgb: lerp 1 3 2; inv 3; band 4; x; y]"},
+		{"[rgb: * 1 2; x; inv 1]", "[rgb: * 2 1; inv 2; x]"},
 	}
 	for _, c := range cases {
 		e1, err := Read(c.a)

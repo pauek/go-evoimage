@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -119,6 +120,65 @@ func (c *Color) Divide(x float64) Color {
 	return Color{c.R / x, c.G / x, c.B / x}
 }
 
+// Ordenación topológica: los nodos estan puestos de tal manera
+// que no hay dependencias hacia nodos de menor índice.
+
+type Topological []*_Node
+
+func (t Topological) Len() int           { return len(t) }
+func (t Topological) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
+
+func (E Expression) TopologicalSort() {
+	_Nodes := make([]*_Node, len(E.Nodes))
+	for i := range E.Nodes {
+		_Nodes[i] = &_Node{
+			Node:  *E.Nodes[i],
+			Order: -1,
+		}
+	}
+	changes := true
+	for changes {
+		changes = false
+		for _, node := range _Nodes {
+			if node.Order >= 0 {
+				continue
+			}
+			max_child_order := 0 // for no-args nodes
+			for _, arg := range node.Args {
+				ord := _Nodes[arg].Order
+				if ord == -1 {
+					max_child_order = -1
+					break
+				}
+				if ord > max_child_order {
+					max_child_order = ord
+				}
+			}
+			if max_child_order >= 0 {
+				node.Order = max_child_order + 1
+				changes = true
+			}
+		}
+	}
+	sorted_Nodes := make([]*_Node, len(_Nodes))
+	for i := range _Nodes {
+		sorted_Nodes[i] = _Nodes[i]
+	}
+	sort.Sort(Topological(sorted_Nodes))
+	for i := range sorted_Nodes {
+		sorted_Nodes[i].NewPos = i
+	}
+	for i := range sorted_Nodes {
+		for j := range sorted_Nodes[i].Args {
+			iold := sorted_Nodes[i].Args[j]
+			inew := _Nodes[iold].NewPos
+			sorted_Nodes[i].Args[j] = inew
+		}
+		E.Nodes[i] = &sorted_Nodes[i].Node
+	}
+}
+
 func (E Expression) TreeShake(roots ...int) Expression {
 	sz := E.Size()
 	if sz == 0 {
@@ -143,14 +203,17 @@ func (E Expression) TreeShake(roots ...int) Expression {
 			Args:  make([]int, len(node.Args)),
 			Const: node.Const,
 		}
-		for j, arg := range node.Args {
-			k := find(arg, order)
-			if k == -1 {
-				newnode.Args[j] = top
-				order[top] = arg
-				top++
-			} else {
-				newnode.Args[j] = k
+		for j := i + 1; j < sz; j++ {
+			if k := find(j, node.Args); k != -1 {
+				arg := j
+				l := find(arg, order)
+				if l == -1 {
+					newnode.Args[k] = top
+					order[top] = arg
+					top++
+				} else {
+					newnode.Args[k] = l
+				}
 			}
 		}
 		newE.Nodes = append(newE.Nodes, &newnode)
@@ -242,16 +305,16 @@ func (node *Node) eval(E Expression, x, y float64, args []float64) float64 {
 		v := 0.0
 		radius := MAX_BLUR_RADIUS * args[1]
 		for i := 0; i < BLUR_SAMPLES; i++ {
-			dx := radius * (2.0 * rand.Float64() - 1.0)
-			dy := radius * (2.0 * rand.Float64() - 1.0)
-			v += E.EvalNodes(x + dx, y + dy, node.Args[0])[node.Args[0]]
+			dx := radius * (2.0*rand.Float64() - 1.0)
+			dy := radius * (2.0*rand.Float64() - 1.0)
+			v += E.EvalNodes(x+dx, y+dy, node.Args[0])[node.Args[0]]
 		}
 		return v / float64(BLUR_SAMPLES)
 
 	case Map:
 		_x, _y := args[1], args[2]
 		return E.EvalNodes(_x, _y, node.Args[0])[node.Args[0]]
-		
+
 	default:
 		panic("not implemented")
 	}
@@ -480,6 +543,7 @@ func Read(s string) (expr Expression, err error) {
 		}
 		expr.Nodes = append(expr.Nodes, node)
 	}
+	expr.TopologicalSort()	
 	return expr.TreeShake(expr.R, expr.G, expr.B), nil
 }
 
