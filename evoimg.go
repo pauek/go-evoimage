@@ -6,7 +6,6 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
-	"sort"
 	"strings"
 	"sync"
 )
@@ -118,65 +117,6 @@ func (c *Color) Add(other Color) {
 
 func (c *Color) Divide(x float64) Color {
 	return Color{c.R / x, c.G / x, c.B / x}
-}
-
-// Ordenación topológica: los nodos estan puestos de tal manera
-// que no hay dependencias hacia nodos de menor índice.
-
-type Topological []*_Node
-
-func (t Topological) Len() int           { return len(t) }
-func (t Topological) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
-
-func (E Expression) TopologicalSort() {
-	_Nodes := make([]*_Node, len(E.Nodes))
-	for i := range E.Nodes {
-		_Nodes[i] = &_Node{
-			Node:  *E.Nodes[i],
-			Order: -1,
-		}
-	}
-	changes := true
-	for changes {
-		changes = false
-		for _, node := range _Nodes {
-			if node.Order >= 0 {
-				continue
-			}
-			max_child_order := 0 // for no-args nodes
-			for _, arg := range node.Args {
-				ord := _Nodes[arg].Order
-				if ord == -1 {
-					max_child_order = -1
-					break
-				}
-				if ord > max_child_order {
-					max_child_order = ord
-				}
-			}
-			if max_child_order >= 0 {
-				node.Order = max_child_order + 1
-				changes = true
-			}
-		}
-	}
-	sorted_Nodes := make([]*_Node, len(_Nodes))
-	for i := range _Nodes {
-		sorted_Nodes[i] = _Nodes[i]
-	}
-	sort.Sort(Topological(sorted_Nodes))
-	for i := range sorted_Nodes {
-		sorted_Nodes[i].NewPos = i
-	}
-	for i := range sorted_Nodes {
-		for j := range sorted_Nodes[i].Args {
-			iold := sorted_Nodes[i].Args[j]
-			inew := _Nodes[iold].NewPos
-			sorted_Nodes[i].Args[j] = inew
-		}
-		E.Nodes[i] = &sorted_Nodes[i].Node
-	}
 }
 
 func (E Expression) TreeShake(roots ...int) Expression {
