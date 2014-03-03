@@ -133,8 +133,8 @@ func (E Expression) TreeShake(roots ...int) Expression {
 		order[top] = root
 		top++
 	}
-	curr := 0
 	var newE Expression
+	curr := 0
 	for order[curr] != -1 {
 		i := order[curr]
 		node := E.Nodes[i]
@@ -144,9 +144,14 @@ func (E Expression) TreeShake(roots ...int) Expression {
 			Const: node.Const,
 		}
 		for j, arg := range node.Args {
-			order[top] = arg
-			newnode.Args[j] = top
-			top++
+			k := find(arg, order)
+			if k == -1 {
+				newnode.Args[j] = top
+				order[top] = arg
+				top++
+			} else {
+				newnode.Args[j] = k
+			}
 		}
 		newE.Nodes = append(newE.Nodes, &newnode)
 		switch {
@@ -255,18 +260,18 @@ func (node *Node) eval(E Expression, x, y float64, args []float64) float64 {
 const BLUR_SAMPLES = 5
 const MAX_BLUR_RADIUS = 0.05
 
-func find(v int, seq []int) bool {
-	for _, x := range seq {
+func find(v int, seq []int) int {
+	for i, x := range seq {
 		if v == x {
-			return true
+			return i
 		}
 	}
-	return false
+	return -1
 }
 
 func uniq(seq []int) (res []int) {
 	for _, x := range seq {
-		if !find(x, res) {
+		if find(x, res) == -1 {
 			res = append(res, x)
 		}
 	}
@@ -284,8 +289,10 @@ func (E Expression) EvalNodes(x, y float64, roots ...int) []float64 {
 	for i := 0; i < top; i++ {
 		node := E.Nodes[selected[i]]
 		for _, arg := range node.Args {
-			selected[top] = arg
-			top++
+			if find(arg, selected) == -1 {
+				selected[top] = arg
+				top++
+			}
 		}
 	}
 	values := make([]float64, E.Size())

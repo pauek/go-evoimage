@@ -18,6 +18,7 @@ func TestTreeShake(t *testing.T) {
 		{"[rg: x; x; b: y]", "[rg: x; b: y]"},
 		{"[r: x; g: r; b: y]", "[r: x; g: r; b: y]"},
 		{"[= 1; = 2; = 3]", "[rgb: = 1]"},
+		{"[rgb: lerp 1 2 3; inv 2; x; band 4; y]", "[rgb: lerp 1 2 3; inv 2; x; band 4; y]"},
 	}
 	for _, c := range cases {
 		e1, err := Read(c.a)
@@ -52,4 +53,9 @@ func TestEvalNodes(t *testing.T) {
 			t.Errorf("Node 1 in '%s' should eval to %g (evals to %g)", e.String(), 1.0, v)
 		}
 	}
+	e, err = Read("[rgb: lerp 1 2 3; inv 2; x; band 4; y]")
+	if err != nil {
+		t.Errorf("Error reading expression: %s", err)
+	}
+	e.EvalNodes(0, 0, 1)
 }
