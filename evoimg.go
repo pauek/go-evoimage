@@ -84,6 +84,9 @@ func init() {
 	}
 }
 
+type Color struct {
+	R, G, B float64
+}
 type Node struct {
 	Op    int
 	Args  []int
@@ -94,27 +97,27 @@ type _Node struct {
 	Order  int
 	NewPos int
 }
+type Expression struct {
+	Nodes   []*Node
+	R, G, B int
+}
 
 func (N *Node) Name() string {
 	return OperatorInfo[N.Op].Name
 }
 
-type Expression []*Node
-
-type Color struct {
-	R, G, B float64
+func (E Expression) Size() int {
+	return len(E.Nodes)
 }
 
-type NodeFunc func(args []float64) float64
-
-func (E *Expression) Size() int {
-	return len(*E)
+func (c *Color) Add(other Color) {
+	c.R += other.R
+	c.G += other.G
+	c.B += other.B
 }
 
-func (E *Expression) ForEach(f func(i int, n *Node)) {
-	for i, node := range *E {
-		f(i, node)
-	}
+func (c *Color) Divide(x float64) Color {
+	return Color{c.R / x, c.G / x, c.B / x}
 }
 
 // Ordenación topológica: los nodos estan puestos de tal manera
@@ -127,23 +130,23 @@ func (t Topological) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
 
 func (E Expression) TopologicalSort() {
-	_E := make([]*_Node, len(E))
-	for i := range E {
-		_E[i] = &_Node{
-			Node:  *E[i],
+	_Nodes := make([]*_Node, len(E.Nodes))
+	for i := range E.Nodes {
+		_Nodes[i] = &_Node{
+			Node:  *E.Nodes[i],
 			Order: -1,
 		}
 	}
 	changes := true
 	for changes {
 		changes = false
-		for _, node := range _E {
+		for _, node := range _Nodes {
 			if node.Order >= 0 {
 				continue
 			}
 			max_child_order := 0 // for no-args nodes
 			for _, arg := range node.Args {
-				ord := _E[arg].Order
+				ord := _Nodes[arg].Order
 				if ord == -1 {
 					max_child_order = -1
 					break
@@ -158,26 +161,26 @@ func (E Expression) TopologicalSort() {
 			}
 		}
 	}
-	old_E := make([]*_Node, len(_E))
-	for i := range _E {
-		old_E[i] = _E[i]
+	sorted_Nodes := make([]*_Node, len(_Nodes))
+	for i := range _Nodes {
+		sorted_Nodes[i] = _Nodes[i]
 	}
-	sort.Sort(Topological(_E))
-	for i := range _E {
-		_E[i].NewPos = i
+	sort.Sort(Topological(sorted_Nodes))
+	for i := range sorted_Nodes {
+		sorted_Nodes[i].NewPos = i
 	}
-	for i := range _E {
-		for j := range _E[i].Args {
-			iold := _E[i].Args[j]
-			inew := old_E[iold].NewPos
-			_E[i].Args[j] = inew
+	for i := range sorted_Nodes {
+		for j := range sorted_Nodes[i].Args {
+			iold := sorted_Nodes[i].Args[j]
+			inew := _Nodes[iold].NewPos
+			sorted_Nodes[i].Args[j] = inew
 		}
-		E[i] = &_E[i].Node
+		E.Nodes[i] = &sorted_Nodes[i].Node
 	}
 }
 
 func (E Expression) TreeShake(roots ...int) Expression {
-	sz := len(E)
+	sz := E.Size()
 	if sz == 0 {
 		return Expression{}
 	}
@@ -186,14 +189,15 @@ func (E Expression) TreeShake(roots ...int) Expression {
 		order[i] = -1
 	}
 	top := 0
-	for _, root := range roots {
+	for _, root := range uniq(roots) {
 		order[top] = root
 		top++
 	}
 	curr := 0
 	var newE Expression
 	for order[curr] != -1 {
-		node := E[order[curr]]
+		i := order[curr]
+		node := E.Nodes[i]
 		newnode := Node{
 			Op:    node.Op,
 			Args:  make([]int, len(node.Args)),
@@ -204,7 +208,15 @@ func (E Expression) TreeShake(roots ...int) Expression {
 			newnode.Args[j] = top
 			top++
 		}
-		newE = append(newE, &newnode)
+		newE.Nodes = append(newE.Nodes, &newnode)
+		switch {
+		case i == E.R:
+			newE.R = curr
+		case i == E.G:
+			newE.G = curr
+		case i == E.B:
+			newE.B = curr
+		}
 		curr++
 	}
 	return newE
@@ -287,13 +299,13 @@ func (node *Node) eval(E Expression, x, y float64, args []float64) float64 {
 		for i := 0; i < BLUR_SAMPLES; i++ {
 			dx := radius * (2.0 * rand.Float64() - 1.0)
 			dy := radius * (2.0 * rand.Float64() - 1.0)
-			v += E.EvalNode(node.Args[0], x + dx, y + dy)
+			v += E.EvalNodes(x + dx, y + dy, node.Args[0])[node.Args[0]]
 		}
 		return v / float64(BLUR_SAMPLES)
 
 	case Map:
 		_x, _y := args[1], args[2]
-		return E.EvalNode(node.Args[0], _x, _y)
+		return E.EvalNodes(_x, _y, node.Args[0])[node.Args[0]]
 		
 	default:
 		panic("not implemented")
@@ -303,32 +315,54 @@ func (node *Node) eval(E Expression, x, y float64, args []float64) float64 {
 const BLUR_SAMPLES = 5
 const MAX_BLUR_RADIUS = 0.05
 
-func (E Expression) EvalNode(root int, x, y float64) float64 {
+func find(v int, seq []int) bool {
+	for _, x := range seq {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+func uniq(seq []int) (res []int) {
+	for _, x := range seq {
+		if !find(x, res) {
+			res = append(res, x)
+		}
+	}
+	return
+}
+
+func (E Expression) EvalNodes(x, y float64, roots ...int) []float64 {
 	// Select nodes that we will compute
-	selected := make([]int, len(E))
-	selected[0] = root
-	top := 1
+	selected := make([]int, E.Size())
+	top := 0
+	for _, root := range uniq(roots) {
+		selected[top] = root
+		top++
+	}
 	for i := 0; i < top; i++ {
-		node := E[selected[i]]
+		node := E.Nodes[selected[i]]
 		for _, arg := range node.Args {
 			selected[top] = arg
 			top++
 		}
 	}
-	values := make([]float64, len(E))
+	values := make([]float64, E.Size())
 	args := make([]float64, MAX_ARGS)
 	for i := top - 1; i >= 0; i-- {
-		node := E[selected[i]]
+		node := E.Nodes[selected[i]]
 		for j, arg := range node.Args {
 			args[j] = values[arg]
 		}
 		values[selected[i]] = node.eval(E, x, y, args)
 	}
-	return values[root]
+	return values
 }
 
-func (E Expression) Eval(x, y float64) float64 {
-	return E.EvalNode(0, x, y)
+func (E Expression) Eval(x, y float64) Color {
+	values := E.EvalNodes(x, y, E.R, E.G, E.B)
+	return Color{values[E.R], values[E.G], values[E.B]}
 }
 
 func _map(x float64) (y float64) {
@@ -342,7 +376,7 @@ func _map(x float64) (y float64) {
 	return
 }
 
-func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) float64 {
+func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color {
 	xsz := (xhigh - xlow) / float64(samples)
 	ysz := (yhigh - ylow) / float64(samples)
 	S := make([]float64, samples*2)
@@ -356,11 +390,11 @@ func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) f
 			S[i*2+dim], S[_i*2+dim] = S[_i*2+dim], S[i*2+dim]
 		}
 	}
-	var v float64
+	var c Color
 	for i := 0; i < len(S); i += 2 {
-		v += E.Eval(S[i], S[i+1])
+		c.Add(E.Eval(S[i], S[i+1]))
 	}
-	return v / float64(samples)
+	return c.Divide(float64(samples))
 }
 
 func (E Expression) Render(size, samples int) image.Image {
@@ -374,16 +408,16 @@ func (E Expression) Render(size, samples int) image.Image {
 				xhigh := float64(i+1) / float64(size)
 				ylow := float64(j) / float64(size)
 				yhigh := float64(j+1) / float64(size)
-				v := E.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
+				c := E.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
 				img.px[i][j] = color.RGBA{
-					uint8(_map(v) * 255.0),
-					uint8(_map(v) * 255.0),
-					uint8(_map(v) * 255.0),
+					uint8(_map(c.R) * 255.0),
+					uint8(_map(c.G) * 255.0),
+					uint8(_map(c.B) * 255.0),
 					255,
 				}
 			}
 			wg.Done()
-		} (i)
+		}(i)
 	}
 	wg.Wait()
 	return img
@@ -391,10 +425,24 @@ func (E Expression) Render(size, samples int) image.Image {
 
 func (E Expression) String() string {
 	s := "["
-	for i, node := range E {
+	for i, node := range E.Nodes {
 		if i > 0 {
 			s += "; "
 		}
+		colon := ""
+		if E.R == i {
+			s += "r"
+			colon = ": "
+		}
+		if E.G == i {
+			s += "g"
+			colon = ": "
+		}
+		if E.B == i {
+			s += "b"
+			colon = ": "
+		}
+		s += colon
 		s += node.Name()
 		if node.Op == Const {
 			s += fmt.Sprintf(" %g", node.Const)
@@ -414,20 +462,43 @@ func Read(s string) (expr Expression, err error) {
 	}
 	s = strings.TrimSpace(s)
 	if s[0] != '[' {
-		return nil, fmt.Errorf("Expression does not start with '['")
+		err = fmt.Errorf("Expression does not start with '['")
+		return
 	}
 	if s[len(s)-1] != ']' {
-		return nil, fmt.Errorf("Expressions does not end with '['")
+		err = fmt.Errorf("Expressions does not end with '['")
+		return
 	}
 	s = s[1 : len(s)-1]
 
 	for i, snod := range strings.Split(s, ";") {
-		rnod := strings.NewReader(snod)
+		parts := strings.Split(snod, ":")
+		switch len(parts) {
+		case 1:
+			snod = parts[0]
+		case 2:
+			for _, c := range strings.TrimSpace(parts[0]) {
+				switch c {
+				case 'r':
+					expr.R = i
+				case 'g':
+					expr.G = i
+				case 'b':
+					expr.B = i
+				}
+			}
+			snod = parts[1]
+		default:
+			err = fmt.Errorf("Error in node %d: wrong number of ':'", i)
+			return
+		}
 
 		var op string
-		n, err := fmt.Fscanf(rnod, "%s", &op)
-		if n != 1 || err != nil {
-			return nil, fmt.Errorf("Error in node %d: '%s'", i, snod)
+		rnod := strings.NewReader(snod)
+		n, err2 := fmt.Fscanf(rnod, "%s", &op)
+		if n != 1 || err2 != nil {
+			err = fmt.Errorf("Error in node %d: '%s'", i, snod)
+			return
 		}
 
 		var node *Node
@@ -436,12 +507,14 @@ func Read(s string) (expr Expression, err error) {
 			node = &Node{Op: Const}
 			n, _ := fmt.Fscanf(rnod, "%f", &node.Const)
 			if n != 1 {
-				return nil, fmt.Errorf("Error in node %d: cannot read constant", i)
+				err = fmt.Errorf("Error in node %d: cannot read constant", i)
+				return
 			}
 		} else {
 			id, ok := Ids[op]
 			if !ok {
-				return nil, fmt.Errorf("Error in node %d: operation '%s' unknown", i, op)
+				err = fmt.Errorf("Error in node %d: operation '%s' unknown", i, op)
+				return
 			}
 			node = &Node{Op: id}
 			for {
@@ -454,13 +527,13 @@ func Read(s string) (expr Expression, err error) {
 			}
 			info := OperatorInfo[node.Op]
 			if info.Nargs != len(node.Args) {
-				return nil, fmt.Errorf("Error in node %d: operation '%s' should have %d args",
-					i, op, info.Nargs)
+				err = fmt.Errorf("Error in node %d: '%s' should have %d args", i, op, info.Nargs)
+				return
 			}
 		}
-		expr = append(expr, node)
+		expr.Nodes = append(expr.Nodes, node)
 	}
-	return expr.TreeShake(0), nil
+	return expr.TreeShake(expr.R, expr.G, expr.B), nil
 }
 
 // Image
