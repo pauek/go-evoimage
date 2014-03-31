@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	Size int
+	Size    int
 	Samples int
 )
 
