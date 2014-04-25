@@ -106,7 +106,7 @@ func (N *Node) Name() string {
 	return OperatorInfo[N.Op].Name
 }
 
-func (E *Expression) Size() int {
+func (E Expression) Size() int {
 	return len(E.Nodes)
 }
 
@@ -129,7 +129,7 @@ func (t Topological) Len() int           { return len(t) }
 func (t Topological) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
 
-func (E *Expression) TopologicalSort() {
+func (E Expression) TopologicalSort() {
 	_Nodes := make([]*_Node, len(E.Nodes))
 	for i := range E.Nodes {
 		_Nodes[i] = &_Node{
@@ -179,10 +179,10 @@ func (E *Expression) TopologicalSort() {
 	}
 }
 
-func (E *Expression) TreeShake(roots ...int) *Expression {
+func (E Expression) TreeShake(roots ...int) (newE Expression) {
 	sz := E.Size()
 	if sz == 0 {
-		return &Expression{}
+		return
 	}
 	order := make([]int, sz+1)
 	for i := range order {
@@ -193,7 +193,6 @@ func (E *Expression) TreeShake(roots ...int) *Expression {
 		order[top] = root
 		top++
 	}
-	var newE Expression
 	curr := 0
 	for order[curr] != -1 {
 		i := order[curr]
@@ -227,10 +226,10 @@ func (E *Expression) TreeShake(roots ...int) *Expression {
 		}
 		curr++
 	}
-	return &newE
+	return
 }
 
-func (node *Node) eval(E *Expression, x, y float64, args []float64) float64 {
+func (node *Node) eval(E Expression, x, y float64, args []float64) float64 {
 	switch node.Op {
 	case Const:
 		return node.Const
@@ -341,7 +340,7 @@ func uniq(seq []int) (res []int) {
 	return
 }
 
-func (E *Expression) EvalNodes(x, y float64, roots ...int) []float64 {
+func (E Expression) EvalNodes(x, y float64, roots ...int) []float64 {
 	// Select nodes that we will compute
 	selected := make([]int, E.Size())
 	top := 0
@@ -370,7 +369,7 @@ func (E *Expression) EvalNodes(x, y float64, roots ...int) []float64 {
 	return values
 }
 
-func (E *Expression) Eval(x, y float64) Color {
+func (E Expression) Eval(x, y float64) Color {
 	values := E.EvalNodes(x, y, E.R, E.G, E.B)
 	return Color{values[E.R], values[E.G], values[E.B]}
 }
@@ -386,7 +385,7 @@ func _map(x float64) (y float64) {
 	return
 }
 
-func (E *Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color {
+func (E Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color {
 	xsz := (xhigh - xlow) / float64(samples)
 	ysz := (yhigh - ylow) / float64(samples)
 	S := make([]float64, samples*2)
@@ -407,7 +406,7 @@ func (E *Expression) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) 
 	return c.Divide(float64(samples))
 }
 
-func (E *Expression) Render(size, samples int) image.Image {
+func (E Expression) Render(size, samples int) image.Image {
 	// var wg sync.WaitGroup
 	img := NewImage(size, size)
 	// wg.Add(size)
@@ -427,30 +426,30 @@ func (E *Expression) Render(size, samples int) image.Image {
 			}
 		}
 		// wg.Done()
-    	// }(i)
+		// }(i)
 	}
 	// wg.Wait()
 	return img
 }
 
-func (E *Expression) String() string {
+func (E Expression) String() string {
 	s := "["
 	for i, node := range E.Nodes {
 		if i > 0 {
-			s += "; "
+			s += "|"
 		}
 		colon := ""
 		if E.R == i {
 			s += "r"
-			colon = ": "
+			colon = ":"
 		}
 		if E.G == i {
 			s += "g"
-			colon = ": "
+			colon = ":"
 		}
 		if E.B == i {
 			s += "b"
-			colon = ": "
+			colon = ":"
 		}
 		s += colon
 		s += node.Name()
@@ -466,8 +465,7 @@ func (E *Expression) String() string {
 	return s
 }
 
-func Read(s string) (expr *Expression, err error) {
-	expr = &Expression{}
+func Read(s string) (expr Expression, err error) {
 	if len(s) == 0 {
 		return
 	}
@@ -482,7 +480,7 @@ func Read(s string) (expr *Expression, err error) {
 	}
 	s = s[1 : len(s)-1]
 
-	for i, snod := range strings.Split(s, ";") {
+	for i, snod := range strings.Split(s, "|") {
 		parts := strings.Split(snod, ":")
 		switch len(parts) {
 		case 1:
@@ -544,7 +542,7 @@ func Read(s string) (expr *Expression, err error) {
 		}
 		expr.Nodes = append(expr.Nodes, node)
 	}
-	expr.TopologicalSort()	
+	expr.TopologicalSort()
 	return expr.TreeShake(expr.R, expr.G, expr.B), nil
 }
 

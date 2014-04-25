@@ -6,20 +6,20 @@ import (
 
 func TestTreeShake(t *testing.T) {
 	// pares de expresiones con la original y el leído + shaken
-	cases := []struct { 
-		a, b string 
+	cases := []struct {
+		a, b string
 	}{
-		{"[x; y; y]", "[rgb: x]"},
-		{"[+ 1 2; x; y; r]", "[rgb: + 1 2; x; y]"},
-		{"[+ 1 3; x; r; y]", "[rgb: + 1 2; x; y]"},
-		{"[+ 2 3; r; x; y]", "[rgb: + 1 2; x; y]"},
-		{"[+ 2 4; r; x; r; y]", "[rgb: + 1 2; x; y]"},
-		{"[r: x; g: y; b: y]", "[r: x; g: y; b: y]"},
-		{"[rg: x; x; b: y]", "[rg: x; b: y]"},
-		{"[r: x; g: r; b: y]", "[r: x; g: r; b: y]"},
-		{"[= 1; = 2; = 3]", "[rgb: = 1]"},
-		{"[rgb: lerp 1 2 3; inv 2; x; band 4; y]", "[rgb: lerp 1 3 2; inv 3; band 4; x; y]"},
-		{"[rgb: * 1 2; x; inv 1]", "[rgb: * 2 1; inv 2; x]"},
+		{"[x|y|y]", "[rgb:x]"},
+		{"[+ 1 2|x|y|r]", "[rgb:+ 1 2|x|y]"},
+		{"[+ 1 3|x|r|y]", "[rgb:+ 1 2|x|y]"},
+		{"[+ 2 3|r|x|y]", "[rgb:+ 1 2|x|y]"},
+		{"[+ 2 4|r|x|r|y]", "[rgb:+ 1 2|x|y]"},
+		{"[r:x|g:y|b:y]", "[r:x|g:y|b:y]"},
+		{"[rg:x|x|b:y]", "[rg:x|b:y]"},
+		{"[r:x|g:r|b:y]", "[r:x|g:r|b:y]"},
+		{"[= 1|= 2|= 3]", "[rgb:= 1]"},
+		{"[rgb:lerp 1 2 3|inv 2|x|band 4|y]", "[rgb:lerp 1 3 2|inv 3|band 4|x|y]"},
+		{"[rgb:* 1 2|x|inv 1]", "[rgb:* 2 1|inv 2|x]"},
 	}
 	for _, c := range cases {
 		e1, err := Read(c.a)
@@ -33,7 +33,7 @@ func TestTreeShake(t *testing.T) {
 }
 
 func TestEvalNodes(t *testing.T) {
-	e, err := Read("[+ 1 2; x; y]")
+	e, err := Read("[+ 1 2|x|y]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
@@ -45,7 +45,7 @@ func TestEvalNodes(t *testing.T) {
 			t.Errorf("Node 2 in '%s' should eval to %g", e.String(), x)
 		}
 	}
-	e, err = Read("[blur 1 3; band 2; x; = 1]")
+	e, err = Read("[blur 1 3|band 2|x|= 1]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
@@ -54,7 +54,7 @@ func TestEvalNodes(t *testing.T) {
 			t.Errorf("Node 1 in '%s' should eval to %g (evals to %g)", e.String(), 1.0, v)
 		}
 	}
-	e, err = Read("[rgb: lerp 1 2 3; inv 2; x; band 4; y]")
+	e, err = Read("[rgb:lerp 1 2 3|inv 2|x|band 4|y]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
