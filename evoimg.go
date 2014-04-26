@@ -11,6 +11,24 @@ import (
 	// "sync"
 )
 
+func find(v int, seq []int) int {
+	for i, x := range seq {
+		if v == x {
+			return i
+		}
+	}
+	return -1
+}
+
+func uniq(seq []int) (res []int) {
+	for _, x := range seq {
+		if find(x, res) == -1 {
+			res = append(res, x)
+		}
+	}
+	return
+}
+
 const MAX_ARGS = 10
 
 type OpInfo struct {
@@ -42,7 +60,6 @@ type Color struct {
 type Node struct {
 	Op    string
 	Args  []int
-	Const float64
 	Value float64
 }
 type _Node struct {
@@ -51,12 +68,9 @@ type _Node struct {
 	NewPos int
 }
 type Module struct {
-	Nodes   []*Node
-	R, G, B int
-}
-
-func (M Module) Size() int {
-	return len(M.Nodes)
+	Nodes       []*Node
+	Outputs     []int
+	OutputNames []string
 }
 
 func (c *Color) Add(other Color) {
@@ -79,6 +93,10 @@ type Topological []*_Node
 func (t Topological) Len() int           { return len(t) }
 func (t Topological) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
+
+func (M Module) Size() int {
+	return len(M.Nodes)
+}
 
 func (M Module) TopologicalSort() {
 	_Nodes := make([]*_Node, len(M.Nodes))
@@ -135,6 +153,8 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 	if sz == 0 {
 		return
 	}
+	newM.Outputs = make([]int, len(M.Outputs))
+	newM.OutputNames = make([]string, len(M.OutputNames))
 	order := make([]int, sz+1)
 	for i := range order {
 		order[i] = -1
@@ -151,7 +171,7 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 		newnode := Node{
 			Op:    node.Op,
 			Args:  make([]int, len(node.Args)),
-			Const: node.Const,
+			Value: node.Value,
 		}
 		for j := i + 1; j < sz; j++ {
 			if k := find(j, node.Args); k != -1 {
@@ -167,110 +187,18 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 			}
 		}
 		newM.Nodes = append(newM.Nodes, &newnode)
-		switch {
-		case i == M.R:
-			newM.R = curr
-		case i == M.G:
-			newM.G = curr
-		case i == M.B:
-			newM.B = curr
+		for j := range M.Outputs {
+			if i == M.Outputs[j] {
+				newM.Outputs[j] = curr
+				newM.OutputNames[j] = M.OutputNames[j]
+			}
 		}
 		curr++
 	}
 	return
 }
 
-func (node *Node) eval(M Module, x, y float64, args []float64) float64 {
-	switch node.Op {
-	case "=":
-		return node.Const
-	case "id":
-		return args[0]
-	case "x":
-		return x
-	case "y":
-		return y
-	case "r":
-		_x, _y := 2*(x-.5), 2*(y-.5)
-		return math.Sqrt(_x*_x + _y*_y)
-	case "t":
-		_x, _y := x-.5, math.Abs(y-.5)
-		return math.Atan2(_y, -_x) / math.Pi
-	case "+":
-		return (args[0] + args[1]) / 2.0
-	case "*":
-		return args[0] * args[1]
-	case "cos":
-		return (1 + math.Cos(2*math.Pi*args[0])) / 2
-	case "sin":
-		return (1 + math.Sin(2*math.Pi*args[0])) / 2
-	case "lerp":
-		return args[0]*args[1] + (1-args[0])*args[2]
-	case "inv":
-		return (1 - args[0])
-	case "band":
-		if args[0] > .33 && args[0] < .66 {
-			return 1.0
-		} else {
-			return 0.0
-		}
-	case "bw":
-		if args[0] > .5 {
-			return 1.0
-		} else {
-			return 0.0
-		}
-	case "and":
-		if args[0] > .5 && args[1] > .5 {
-			return 1.0
-		} else {
-			return 0.0
-		}
-	case "or":
-		if args[0] > .5 || args[1] > .5 {
-			return 1.0
-		} else {
-			return 0.0
-		}
-	case "xor":
-		if args[0] > .5 && args[1] > .5 ||
-			args[0] < .5 && args[1] < .5 {
-			return 1.0
-		} else {
-			return 0.0
-		}
-	case "not":
-		if args[0] > .5 {
-			return 0.0
-		} else {
-			return 1.0
-		}
-	case "if":
-		if args[0] > .5 {
-			return args[1]
-		} else {
-			return args[2]
-		}
-	case "blur":
-		v := 0.0
-		radius := MAX_BLUR_RADIUS * args[1]
-		for i := 0; i < BLUR_SAMPLES; i++ {
-			dx := radius * (2.0*rand.Float64() - 1.0)
-			dy := radius * (2.0*rand.Float64() - 1.0)
-			v += M.EvalNodes(x+dx, y+dy, node.Args[0])[node.Args[0]]
-		}
-		return v / float64(BLUR_SAMPLES)
-
-	case "map":
-		_x, _y := args[1], args[2]
-		return M.EvalNodes(_x, _y, node.Args[0])[node.Args[0]]
-
-	default:
-		panic("not implemented")
-	}
-}
-
-func (node *Node) eval2(M Module, x, y float64) {
+func (node *Node) eval(M Module, x, y float64) {
 	switch node.Op {
 	case "=":
 		// Value is already there
@@ -370,14 +298,16 @@ func (node *Node) eval2(M Module, x, y float64) {
 		for i := 0; i < BLUR_SAMPLES; i++ {
 			dx := radius * (2.0*rand.Float64() - 1.0)
 			dy := radius * (2.0*rand.Float64() - 1.0)
-			v += M.EvalNodes(x+dx, y+dy, node.Args[0])[node.Args[0]]
+			M.EvalNodes(x+dx, y+dy, node.Args[0])
+			v += M.Nodes[node.Args[0]].Value
 		}
 		node.Value = v / float64(BLUR_SAMPLES)
 
 	case "map":
 		_x := M.Nodes[node.Args[1]].Value
 		_y := M.Nodes[node.Args[2]].Value
-		node.Value = M.EvalNodes(_x, _y, node.Args[0])[node.Args[0]]
+		M.EvalNodes(_x, _y, node.Args[0])
+		node.Value = M.Nodes[node.Args[0]].Value
 
 	default:
 		panic("not implemented")
@@ -387,62 +317,37 @@ func (node *Node) eval2(M Module, x, y float64) {
 const BLUR_SAMPLES = 5
 const MAX_BLUR_RADIUS = 0.05
 
-func find(v int, seq []int) int {
-	for i, x := range seq {
-		if v == x {
-			return i
-		}
-	}
-	return -1
-}
-
-func uniq(seq []int) (res []int) {
-	for _, x := range seq {
-		if find(x, res) == -1 {
-			res = append(res, x)
-		}
-	}
-	return
-}
-
-func (M Module) EvalNodes(x, y float64, roots ...int) []float64 {
+func (M Module) EvalNodes(x, y float64, roots ...int) {
 	// Select nodes that we will compute
 	selected := make([]int, M.Size())
 	top := 0
-	for _, root := range uniq(roots) {
-		selected[top] = root
-		top++
+
+	_add := func(i int) {
+		if find(i, selected) == -1 {
+			selected[top] = i
+			top++
+		}
+	}
+
+	for _, root := range roots {
+		_add(root)
 	}
 	for i := 0; i < top; i++ {
-		node := M.Nodes[selected[i]]
-		for _, arg := range node.Args {
-			if find(arg, selected) == -1 {
-				selected[top] = arg
-				top++
-			}
+		for _, arg := range M.Nodes[selected[i]].Args {
+			_add(arg)
 		}
 	}
-	values := make([]float64, M.Size())
-	args := make([]float64, MAX_ARGS)
 	for i := top - 1; i >= 0; i-- {
-		node := M.Nodes[selected[i]]
-		for j, arg := range node.Args {
-			args[j] = values[arg]
-		}
-		values[selected[i]] = node.eval(M, x, y, args)
-	}
-	return values
-}
-
-func (M Module) EvalAll(x, y float64) {
-	for i := len(M.Nodes) - 1; i >= 0; i-- {
-		M.Nodes[i].eval2(M, x, y)
+		M.Nodes[selected[i]].eval(M, x, y)
 	}
 }
 
-func (M Module) Eval(x, y float64) Color {
-	values := M.EvalNodes(x, y, M.R, M.G, M.B)
-	return Color{values[M.R], values[M.G], values[M.B]}
+func (M Module) Eval(x, y float64) (output []float64) {
+	M.EvalNodes(x, y, M.Outputs...)
+	for i := range M.Outputs {
+		output = append(output, M.Nodes[M.Outputs[i]].Value)
+	}
+	return
 }
 
 func _map(x float64) (y float64) {
@@ -472,7 +377,8 @@ func (M Module) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color
 	}
 	var c Color
 	for i := 0; i < len(S); i += 2 {
-		c.Add(M.Eval(S[i], S[i+1]))
+		out := M.Eval(S[i], S[i+1])
+		c.Add(Color{out[0], out[1], out[2]})
 	}
 	return c.Divide(float64(samples))
 }
@@ -510,22 +416,16 @@ func (M Module) String() string {
 			s += "|"
 		}
 		colon := ""
-		if M.R == i {
-			s += "r"
-			colon = ":"
-		}
-		if M.G == i {
-			s += "g"
-			colon = ":"
-		}
-		if M.B == i {
-			s += "b"
-			colon = ":"
+		for j := range M.Outputs {
+			if i == M.Outputs[j] {
+				s += M.OutputNames[j]
+				colon = ":"
+			}
 		}
 		s += colon
 		s += node.Op
 		if node.Op == "=" {
-			s += fmt.Sprintf(" %g", node.Const)
+			s += fmt.Sprintf(" %g", node.Value)
 		} else {
 			for _, arg := range node.Args {
 				s += fmt.Sprintf(" %d", arg)
@@ -536,7 +436,7 @@ func (M Module) String() string {
 	return s
 }
 
-func Read(s string) (mod Module, err error) {
+func read(s string) (mod Module, err error) {
 	if len(s) == 0 {
 		return
 	}
@@ -558,14 +458,8 @@ func Read(s string) (mod Module, err error) {
 			snod = parts[0]
 		case 2:
 			for _, c := range strings.TrimSpace(parts[0]) {
-				switch c {
-				case 'r':
-					mod.R = i
-				case 'g':
-					mod.G = i
-				case 'b':
-					mod.B = i
-				}
+				mod.Outputs = append(mod.Outputs, i)
+				mod.OutputNames = append(mod.OutputNames, fmt.Sprintf("%c", c))
 			}
 			snod = parts[1]
 		default:
@@ -585,7 +479,7 @@ func Read(s string) (mod Module, err error) {
 		if op == "=" {
 			// A constant
 			node = &Node{Op: "="}
-			n, _ := fmt.Fscanf(rnod, "%f", &node.Const)
+			n, _ := fmt.Fscanf(rnod, "%f", &node.Value)
 			if n != 1 {
 				err = fmt.Errorf("Error in node %d: cannot read constant", i)
 				return
@@ -612,8 +506,21 @@ func Read(s string) (mod Module, err error) {
 		}
 		mod.Nodes = append(mod.Nodes, node)
 	}
+	if len(mod.Outputs) == 0 {
+		err = fmt.Errorf("Error in module: there are no outputs")
+		return
+	}
+	return
+}
+
+func Read(s string) (mod Module, err error) {
+	mod, err = read(s)
+	if err != nil {
+		return
+	}
 	mod.TopologicalSort()
-	return mod.TreeShake(mod.R, mod.G, mod.B), nil
+	mod = mod.TreeShake(mod.Outputs...)
+	return
 }
 
 // Image
