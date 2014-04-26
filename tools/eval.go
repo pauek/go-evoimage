@@ -21,12 +21,17 @@ func main() {
 	flag.Parse()
 
 	args := flag.Args()
+	if len(args) == 0 {
+		fmt.Println("Missing expression")
+		os.Exit(1)
+	}
 	e, err := eimg.Read(args[0])
 	if err != nil {
-		fmt.Println("ERROR:", err)
+		fmt.Println("ERROR: ", err)
 		os.Exit(1)
 	}
 	fmt.Println(e)
+
 	img := e.Render(Size, Samples)
 	f, err := os.Create("img.png")
 	if err != nil {
