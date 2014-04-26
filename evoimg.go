@@ -323,7 +323,7 @@ func (M Module) EvalNodes(x, y float64, roots ...int) {
 	top := 0
 
 	_add := func(i int) {
-		if find(i, selected) == -1 {
+		if find(i, selected[:top]) == -1 {
 			selected[top] = i
 			top++
 		}
