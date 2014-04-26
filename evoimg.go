@@ -17,31 +17,21 @@ type OpInfo struct {
 	Nargs int
 }
 
-var OperatorInfo = map[string]OpInfo{
-	"=": {1},
-	"x": {0},
-	"y": {0},
-	"r": {0},
-	"t": {0},
+var NumArguments = map[int][]string{
+	0: {"x", "y", "r", "t"},
+	1: {"=", "id", "cos", "sin", "inv", "band", "bw", "not"},
+	2: {"+", "*", "and", "or", "xor", "blur"},
+	3: {"lerp", "if", "map"},
+}
 
-	"id":   {1},
-	"cos":  {1},
-	"sin":  {1},
-	"inv":  {1},
-	"band": {1},
-	"bw":   {1},
-	"not":  {1},
+var OperatorInfo = make(map[string]OpInfo)
 
-	"+":    {2},
-	"*":    {2},
-	"and":  {2},
-	"or":   {2},
-	"xor":  {2},
-	"blur": {2}, // (blur <img> <blur-radius>)
-
-	"lerp": {3},
-	"if":   {3},
-	"map":  {3},
+func init() {
+	for nargs, ops := range NumArguments {
+		for _, op := range ops {
+			OperatorInfo[op] = OpInfo{nargs}
+		}
+	}
 }
 
 type Color struct {
@@ -51,6 +41,7 @@ type Node struct {
 	Op    string
 	Args  []int
 	Const float64
+	Value float64
 }
 type _Node struct {
 	Node
@@ -78,6 +69,8 @@ func (c *Color) Divide(x float64) Color {
 
 // Ordenación topológica: los nodos estan puestos de tal manera
 // que no hay dependencias hacia nodos de menor índice.
+// Esto permite evaluar con un bucle lineal desde los índices mayores
+// a los menores.
 
 type Topological []*_Node
 
@@ -275,6 +268,120 @@ func (node *Node) eval(M Module, x, y float64, args []float64) float64 {
 	}
 }
 
+func (node *Node) eval2(M Module, x, y float64) {
+	switch node.Op {
+	case "=":
+		// Value is already there
+	case "id":
+		node.Value = M.Nodes[node.Args[0]].Value
+	case "x":
+		node.Value = x
+	case "y":
+		node.Value = y
+	case "r":
+		_x, _y := 2*(x-.5), 2*(y-.5)
+		node.Value = math.Sqrt(_x*_x + _y*_y)
+	case "t":
+		_x, _y := x-.5, math.Abs(y-.5)
+		node.Value = math.Atan2(_y, -_x) / math.Pi
+	case "+":
+		a := M.Nodes[node.Args[0]].Value
+		b := M.Nodes[node.Args[1]].Value
+		node.Value = (a + b) / 2.0
+	case "*":
+		a := M.Nodes[node.Args[0]].Value
+		b := M.Nodes[node.Args[1]].Value
+		node.Value = a * b
+	case "cos":
+		f := M.Nodes[node.Args[0]].Value
+		node.Value = (1 + math.Cos(2*math.Pi*f)) / 2
+	case "sin":
+		f := M.Nodes[node.Args[0]].Value
+		node.Value = (1 + math.Sin(2*math.Pi*f)) / 2
+	case "lerp":
+		t := M.Nodes[node.Args[0]].Value
+		A := M.Nodes[node.Args[1]].Value
+		B := M.Nodes[node.Args[2]].Value
+		node.Value = t*A + (1-t)*B
+	case "inv":
+		a := M.Nodes[node.Args[0]].Value
+		node.Value = (1 - a)
+	case "band":
+		a := M.Nodes[node.Args[0]].Value
+		if a > .33 && a < .66 {
+			node.Value = 1.0
+		} else {
+			node.Value = 0.0
+		}
+	case "bw":
+		a := M.Nodes[node.Args[0]].Value
+		if a > .5 {
+			node.Value = 1.0
+		} else {
+			node.Value = 0.0
+		}
+	case "and":
+		p := M.Nodes[node.Args[0]].Value
+		q := M.Nodes[node.Args[1]].Value
+		if p > .5 && q > .5 {
+			node.Value = 1.0
+		} else {
+			node.Value = 0.0
+		}
+	case "or":
+		p := M.Nodes[node.Args[0]].Value
+		q := M.Nodes[node.Args[1]].Value
+		if p > .5 || q > .5 {
+			node.Value = 1.0
+		} else {
+			node.Value = 0.0
+		}
+	case "xor":
+		p := M.Nodes[node.Args[0]].Value
+		q := M.Nodes[node.Args[1]].Value
+		if p > .5 && q > .5 ||
+			p < .5 && q < .5 {
+			node.Value = 1.0
+		} else {
+			node.Value = 0.0
+		}
+	case "not":
+		p := M.Nodes[node.Args[0]].Value
+		if p > .5 {
+			node.Value = 0.0
+		} else {
+			node.Value = 1.0
+		}
+	case "if":
+		cond := M.Nodes[node.Args[0]].Value
+		_then := M.Nodes[node.Args[1]].Value
+		_else := M.Nodes[node.Args[2]].Value
+		if cond > .5 {
+			node.Value = _then
+		} else {
+			node.Value = _else
+		}
+	case "blur":
+		v := 0.0
+		a := M.Nodes[node.Args[0]].Value
+		radius := MAX_BLUR_RADIUS * a
+		for i := 0; i < BLUR_SAMPLES; i++ {
+			dx := radius * (2.0*rand.Float64() - 1.0)
+			dy := radius * (2.0*rand.Float64() - 1.0)
+			v += M.EvalNodes(x+dx, y+dy, node.Args[0])[node.Args[0]]
+		}
+		node.Value = v / float64(BLUR_SAMPLES)
+
+	case "map":
+		_x := M.Nodes[node.Args[1]].Value
+		_y := M.Nodes[node.Args[2]].Value
+		node.Value = M.EvalNodes(_x, _y, node.Args[0])[node.Args[0]]
+
+	default:
+		panic("not implemented")
+	}
+}
+
 const BLUR_SAMPLES = 5
 const MAX_BLUR_RADIUS = 0.05
 
@@ -323,6 +430,12 @@ func (M Module) EvalNodes(x, y float64, roots ...int) []float64 {
 		values[selected[i]] = node.eval(M, x, y, args)
 	}
 	return values
+}
+
+func (M Module) EvalAll(x, y float64) {
+	for i := len(M.Nodes) - 1; i >= 0; i-- {
+		M.Nodes[i].eval2(M, x, y)
+	}
 }
 
 func (M Module) Eval(x, y float64) Color {
