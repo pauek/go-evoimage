@@ -438,6 +438,7 @@ func (M Module) String() string {
 
 func read(s string) (mod Module, err error) {
 	if len(s) == 0 {
+		err = fmt.Errorf("Module is empty")
 		return
 	}
 	s = strings.TrimSpace(s)

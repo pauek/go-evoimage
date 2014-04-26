@@ -36,7 +36,16 @@ func TestRead(t *testing.T) {
 	no_outputs := "[x|y|y]"
 	_, err := read(no_outputs)
 	if err == nil {
-		t.Errorf("Reading should give an error and it doesn't for %s", no_outputs)
+		t.Errorf("Reading should give an error and it doesn't for '%s'", no_outputs)
+	}
+
+	// empty expression
+	empty := []string{"[]", ""}
+	for _, e := range empty {
+		_, err := read(e)
+		if err == nil {
+			t.Errorf("Reading should give an error and it doesn't for '%s'", e)
+		}
 	}
 }
 
