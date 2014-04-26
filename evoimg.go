@@ -29,7 +29,9 @@ var OperatorInfo = make(map[string]OpInfo)
 func init() {
 	for nargs, ops := range NumArguments {
 		for _, op := range ops {
-			OperatorInfo[op] = OpInfo{nargs}
+			OperatorInfo[op] = OpInfo{
+				Nargs: nargs,
+			}
 		}
 	}
 }
