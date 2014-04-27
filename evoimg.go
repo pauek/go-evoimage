@@ -221,21 +221,6 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 	return
 }
 
-/*
-
-	case "x":
-		node.Value = x
-	case "y":
-		node.Value = y
-	case "r":
-		_x, _y := 2*(x-.5), 2*(y-.5)
-		node.Value = math.Sqrt(_x*_x + _y*_y)
-	case "t":
-		_x, _y := x-.5, math.Abs(y-.5)
-		node.Value = math.Atan2(_y, -_x) / math.Pi
-
-*/
-
 func (node *Node) eval(M Module) {
 	if node.Ready {
 		return
@@ -329,13 +314,10 @@ func (node *Node) eval(M Module) {
 	node.Ready = true
 }
 
-func (M Module) Clear() {
+func (M Module) SetInputs(inputs []float64) {
 	for i := range M.Nodes {
 		M.Nodes[i].Ready = false
 	}
-}
-
-func (M Module) SetInputs(inputs []float64) {
 	for i := range inputs {
 		for j := range M.Inputs[i] {
 			node := M.Nodes[M.Inputs[i][j]]
@@ -371,7 +353,6 @@ func (M Module) outputIndex(name rune) (index int) {
 }
 
 func (M Module) EvalNodes(roots ...int) {
-	fmt.Println()
 	// Select nodes that we will compute
 	selected := make([]int, M.Size())
 	top := 0
@@ -393,12 +374,10 @@ func (M Module) EvalNodes(roots ...int) {
 	}
 	for i := top - 1; i >= 0; i-- {
 		M.Nodes[selected[i]].eval(M)
-		fmt.Println(selected[i], M.Nodes[selected[i]].Value)
 	}
 }
 
 func (M Module) Eval(inputs []float64) (outputs []float64) {
-	M.Clear()
 	M.SetInputs(inputs)
 	M.EvalNodes(M.Outputs...)
 	outputs = M.GetOutputs()
