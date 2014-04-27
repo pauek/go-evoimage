@@ -483,7 +483,7 @@ func (M Module) String() string {
 
 var rmodule = regexp.MustCompile(`\((.*)\)([_a-zA-Z]*)\((.*)\)\[(.*)\]`)
 
-func read(s string) (mod Module, err error) {
+func readModule(s string) (mod Module, err error) {
 	if len(s) == 0 {
 		err = fmt.Errorf("Module is empty")
 		return
@@ -583,7 +583,7 @@ func read(s string) (mod Module, err error) {
 }
 
 func Read(s string) (mod Module, err error) {
-	mod, err = read(s)
+	mod, err = readModule(s)
 	if err != nil {
 		return
 	}

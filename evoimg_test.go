@@ -47,7 +47,7 @@ func TestRead(t *testing.T) {
 
 	// test read (no topological sort, no treeshake)
 	for _, c := range cases {
-		e1, err := read(c.a)
+		e1, err := readModule(c.a)
 		if err != nil {
 			t.Errorf("Cannot read expression '%s': %s", c, err)
 		}
@@ -58,7 +58,7 @@ func TestRead(t *testing.T) {
 
 	// missing outputs
 	no_outputs := "[x|y|y]"
-	_, err := read(no_outputs)
+	_, err := readModule(no_outputs)
 	if err == nil {
 		t.Errorf("Reading should give an error and it doesn't for '%s'", no_outputs)
 	}
@@ -66,7 +66,7 @@ func TestRead(t *testing.T) {
 	// empty expression
 	empty := []string{"[]", ""}
 	for _, e := range empty {
-		_, err := read(e)
+		_, err := readModule(e)
 		if err == nil {
 			t.Errorf("Reading should give an error and it doesn't for '%s'", e)
 		}
