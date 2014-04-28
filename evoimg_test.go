@@ -1,8 +1,8 @@
 package evoimage
 
 import (
-	"testing"
 	"math"
+	"testing"
 )
 
 func TestReadErrorsModule(t *testing.T) {
@@ -14,14 +14,20 @@ func TestReadErrorsModule(t *testing.T) {
 			"(y)f(ab)[+ 1 2|a|b]",
 			"Missing output `y`",
 		}, {
-			"",                        // empty string
+			"", // empty string
 			"Module is empty",
 		}, {
-			"()()[]",                  // empty expression
+			"()()[]", // empty expression
 			"Empty node",
 		}, {
-			"(x)()[x:+ 1 2]",          // missing nodes
+			"(x)()[x:+ 1 2]", // missing nodes
 			"Nonexistent node 1",
+		}, {
+			"(y)(x)[y:+ 1|x]", // wrong number of args
+			"Error in node 0: `+` has 2 args, not 1.",
+		}, {
+			"(y)(x)[y:+ 1|x]", // wrong number of args
+			"Error in node 0: `+` has 2 args, not 1.",
 		},
 	}
 	for _, cas := range cases {
@@ -91,7 +97,6 @@ func TestParseModule(t *testing.T) {
 		}
 	}
 }
-
 
 func TestTopologicalSort(t *testing.T) {
 	cases := []struct{ a, b string }{
@@ -266,16 +271,26 @@ func TestReadErrorsCircuit(t *testing.T) {
 			"(abc)(x)[abc:x]",
 			"Outputs != 'rgb'!",
 		}, {
+			"(rgb)(xyrt)[r:+ 1 2|g:+ 3 4|b:sum 5 6|x|y|r|t]",
+			"Missing module `sum`",
+		}, {
 			"(rgb)(xyrt)[r:+ 1 2|g:+ 3 4|b:sum 5 6|x|y|r|t];(fg)sum(xy)[f:+ 1 2|g:x|y]",
 			"Module 'sum' has more than one output",
+		}, {
+			"(rgb)(xy)[rgb:sum 1 2|x|y];(f)sum(xyz)[f:+ 1 2|x|+ 3 4|y|z]",
+			"Module `sum` has 3 inputs, not 2.",
+		}, {
+			"(rgb)(x)[rgb:x];(y)a(x)[y:x];(w)a(v)[w:v]",
+			"Duplicated module `a`.",
 		},
 	}
 	for _, cas := range cases {
-		_, err := Read(cas.smod)
+		C, err := Read(cas.smod)
 		if err == nil ||
 			len(err.Error()) < len(cas.serror) ||
 			err.Error()[:len(cas.serror)] != cas.serror {
 			t.Errorf("Read should give '%s' error for '%s'", cas.serror, cas.smod)
+			t.Log(C)
 			if err != nil {
 				t.Logf("Error given is '%s'", err)
 			} else {
@@ -286,7 +301,7 @@ func TestReadErrorsCircuit(t *testing.T) {
 }
 
 func TestCircuitEval(t *testing.T) {
-	cases := []struct{ 
+	cases := []struct {
 		circuit string
 		inputs  []float64
 		outputs []float64
@@ -316,13 +331,13 @@ func TestCircuitEval(t *testing.T) {
 		}
 		outputs := C.Eval(cas.inputs)
 		if len(outputs) != len(cas.outputs) {
-			t.Errorf("Different number of outputs for '%s': %#v versus %#v", 
+			t.Errorf("Different number of outputs for '%s': %#v versus %#v",
 				cas.circuit, outputs, cas.outputs)
 		} else {
 			for i := range outputs {
-				if math.Abs(outputs[i] - cas.outputs[i]) > 1e-9 {
+				if math.Abs(outputs[i]-cas.outputs[i]) > 1e-9 {
 					t.Errorf("Different value for output %d: %f vs. %f", i, outputs[i], cas.outputs[i])
-					t.Logf("Difference = %f", outputs[i] - cas.outputs[i])
+					t.Logf("Difference = %f", outputs[i]-cas.outputs[i])
 				}
 			}
 		}

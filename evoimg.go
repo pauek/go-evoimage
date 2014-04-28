@@ -648,7 +648,8 @@ func parseModule(s string) (mod Module, err error) {
 					node.Args = append(node.Args, arg)
 				}
 				if info.Nargs != len(node.Args) {
-					err = fmt.Errorf("Error in node %d: '%s' should have %d args", i, op, info.Nargs)
+					err = fmt.Errorf("Error in node %d: `%s` has %d args, not %d.", 
+						i, op, info.Nargs, len(node.Args))
 					return
 				}
 			}
@@ -702,7 +703,7 @@ func Read(s string) (C Circuit, err error) {
 		if _, ok := C.Modules[mod.Name]; !ok {
 			C.Modules[mod.Name] = mod.TreeShake(mod.Outputs...)
 		} else {
-			return C, fmt.Errorf("There is already a module named '%s'", mod.Name)
+			return C, fmt.Errorf("Duplicated module `%s`.", mod.Name)
 		}
 	}
 	// There is a main module, with an empty name.
@@ -723,10 +724,29 @@ func Read(s string) (C Circuit, err error) {
 	}
 
 	// Determine which nodes are calls to other modules
+	// + check number of args is correct
 	for name, mod := range C.Modules {
+		isInput := make(map[string]bool)
+		for i := range mod.InputNames {
+			sname := fmt.Sprintf("%c", mod.InputNames[i]) 
+			isInput[sname] = true
+		}
 		for i, node := range mod.Nodes {
+			_, isOperator := OperatorInfo[node.Op]
+			if isOperator || isInput[node.Op] {
+				continue
+			}
 			if _, ok := C.Modules[node.Op]; ok {
 				C.Modules[name].Nodes[i].Call = true
+				has := len(C.Modules[node.Op].Inputs)
+				used := len(node.Args)
+				if used != has {
+					err = fmt.Errorf("Module `%s` has %d inputs, not %d.", node.Op, has, used)
+					return
+				}
+			} else {
+				err = fmt.Errorf("Missing module `%s`", node.Op)
+				return
 			}
 		}
 	}
