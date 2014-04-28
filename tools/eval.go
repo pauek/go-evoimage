@@ -30,8 +30,6 @@ func main() {
 		fmt.Println("ERROR: ", err)
 		os.Exit(1)
 	}
-	fmt.Println(e)
-
 	img := e.Render(Size, Samples)
 	f, err := os.Create("img.png")
 	if err != nil {

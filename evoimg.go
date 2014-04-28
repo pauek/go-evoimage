@@ -112,7 +112,7 @@ func (M Module) OutputNamesAsString() (s string) {
 	return s
 }
 
-func (M Module) TopologicalSort() {
+func (M *Module) TopologicalSort() {
 	_Nodes := make([]*_Node, len(M.Nodes))
 	for i := range M.Nodes {
 		_Nodes[i] = &_Node{
@@ -345,11 +345,11 @@ func (M Module) SetInputs(inputs []float64) {
 	for i := range M.Nodes {
 		M.Nodes[i].Ready = false
 	}
-	for i := range inputs {
+	for i := range M.Inputs {
 		for j := range M.Inputs[i] {
-			node := M.Nodes[M.Inputs[i][j]]
-			node.Value = inputs[i]
-			node.Ready = true
+			k := M.Inputs[i][j]
+			M.Nodes[k].Value = inputs[i]
+			M.Nodes[k].Ready = true
 		}
 	}
 }
@@ -464,11 +464,12 @@ func (C Circuit) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Colo
 	}
 	var c Color
 	for i := 0; i < len(S); i += 2 {
-		x := S[i]
-		y := S[i+1]
-		r := math.Sqrt(x*x + y*y)
-		t := math.Atan2(y, x)
-		out := C.Eval([]float64{x, y, r, t})
+		x, y := S[i], S[i+1]
+		_x, _y := x - .5, y - .5
+		r := math.Sqrt(_x*_x + _y*_y)
+		t := math.Atan2(_y, _x)
+		inputs := []float64{x, y, r, t}
+		out := C.Eval(inputs)
 		c.Add(Color{out[0], out[1], out[2]})
 	}
 	return c.Divide(float64(samples))

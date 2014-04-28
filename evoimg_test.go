@@ -308,7 +308,7 @@ func TestCircuitEval(t *testing.T) {
 	}{
 		{
 			"(rgb)(xy)[r:x|gb:y]",
-			[]float64{0.1, 0.9},
+			[]float64{0.1, 0.9, /* two extra inputs */ 0.0, 0.0}, 
 			[]float64{0.1, 0.9, 0.9},
 		}, {
 			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
