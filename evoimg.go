@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	// "sync"
 )
 
 func find(v int, seq []int) int {
