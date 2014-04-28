@@ -62,6 +62,7 @@ type Node struct {
 	Args  []int
 	Value float64
 	Ready bool
+	Call  bool
 }
 type _Node struct {
 	Node
@@ -75,6 +76,9 @@ type Module struct {
 	InputNames  []rune
 	Outputs     []int
 	OutputNames []rune
+}
+type Circuit struct {
+	Modules map[string]Module
 }
 
 func (c *Color) Add(other Color) {
@@ -100,6 +104,13 @@ func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
 
 func (M Module) Size() int {
 	return len(M.Nodes)
+}
+
+func (M Module) OutputNamesAsString() (s string) {
+	for _, c := range M.OutputNames {
+		s += fmt.Sprintf("%c", c)
+	}
+	return s
 }
 
 func (M Module) TopologicalSort() {
@@ -150,6 +161,20 @@ func (M Module) TopologicalSort() {
 		}
 		M.Nodes[i] = &sorted_Nodes[i].Node
 	}
+	// Reconstruct Inputs
+	M.Inputs = make([][]int, len(M.InputNames))
+	for i, v := range M.InputNames {
+		name := fmt.Sprintf("%c", v)
+		for j, node := range M.Nodes {
+			if node.Op == name {
+				M.Inputs[i] = append(M.Inputs[i], j)
+			}
+		}
+	}
+	// Reconstructo Outputs
+	for i := range M.Outputs {
+		M.Outputs[i] = _Nodes[M.Outputs[i]].NewPos
+	}
 }
 
 func (M Module) TreeShake(roots ...int) (newM Module) {
@@ -157,6 +182,8 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 	if sz == 0 {
 		return
 	}
+	newM.Name = M.Name
+
 	inputs := make([][]int, len(M.Inputs))
 	inputNames := make([]rune, len(M.InputNames))
 	newM.Outputs = make([]int, len(M.Outputs))
@@ -167,9 +194,11 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 		order[i] = -1
 	}
 	top := 0
-	for _, root := range uniq(roots) {
-		order[top] = root
-		top++
+	for i := range M.Nodes {
+		if find(i, roots) != -1 {
+			order[top] = i
+			top++
+		}
 	}
 	curr := 0
 	for order[curr] != -1 {
@@ -210,7 +239,6 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 		}
 		curr++
 	}
-	fmt.Println(inputs, inputNames)
 	// remove unused inputs (detect with empty inputnames)
 	for i := range inputs {
 		if len(inputs[i]) > 0 {
@@ -352,7 +380,7 @@ func (M Module) outputIndex(name rune) (index int) {
 	return -1
 }
 
-func (M Module) EvalNodes(roots ...int) {
+func (M Module) EvalNodes(C *Circuit, roots ...int) {
 	// Select nodes that we will compute
 	selected := make([]int, M.Size())
 	top := 0
@@ -373,15 +401,41 @@ func (M Module) EvalNodes(roots ...int) {
 		}
 	}
 	for i := top - 1; i >= 0; i-- {
-		M.Nodes[selected[i]].eval(M)
+		if M.Nodes[selected[i]].Call {
+			node := &M.Nodes[selected[i]]
+			inputs := []float64{}
+			for _, arg := range (*node).Args {
+				inputs = append(inputs, M.Nodes[arg].Value)
+			}
+			outputs := C.EvalModule((*node).Op, inputs)
+			(*node).Value = outputs[0]
+		} else {
+			M.Nodes[selected[i]].eval(M)
+		}
 	}
 }
 
-func (M Module) Eval(inputs []float64) (outputs []float64) {
-	M.SetInputs(inputs)
-	M.EvalNodes(M.Outputs...)
-	outputs = M.GetOutputs()
+func (mod Module) Eval(C *Circuit, inputs []float64) (outputs []float64) {
+	mod.SetInputs(inputs)
+	mod.EvalNodes(C, mod.Outputs...)
+	outputs = mod.GetOutputs()
 	return
+}
+
+func (C Circuit) EvalModule(name string, inputs []float64) (outputs []float64) {
+	mod, ok := C.Modules[name]
+	if !ok {
+		msg := fmt.Sprintf("Module '%s' missing", mod)
+		panic(msg)
+	}
+	mod.SetInputs(inputs)
+	mod.EvalNodes(&C, mod.Outputs...)
+	outputs = mod.GetOutputs()
+	return
+}
+
+func (C Circuit) Eval(inputs []float64) (outputs []float64) {
+	return C.EvalModule("", inputs)
 }
 
 func _map(x float64) (y float64) {
@@ -395,7 +449,7 @@ func _map(x float64) (y float64) {
 	return
 }
 
-func (M Module) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color {
+func (C Circuit) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color {
 	xsz := (xhigh - xlow) / float64(samples)
 	ysz := (yhigh - ylow) / float64(samples)
 	S := make([]float64, samples*2)
@@ -411,35 +465,33 @@ func (M Module) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color
 	}
 	var c Color
 	for i := 0; i < len(S); i += 2 {
-		out := M.Eval([]float64{S[i], S[i+1]})
+		x := S[i]
+		y := S[i+1]
+		r := math.Sqrt(x*x + y*y)
+		t := math.Atan2(y, x)
+		out := C.Eval([]float64{x, y, r, t})
 		c.Add(Color{out[0], out[1], out[2]})
 	}
 	return c.Divide(float64(samples))
 }
 
-func (M Module) Render(size, samples int) image.Image {
-	// var wg sync.WaitGroup
+func (C Circuit) Render(size, samples int) image.Image {
 	img := NewImage(size, size)
-	// wg.Add(size)
 	for i := 0; i < size; i++ {
-		// func(i int) {
 		for j := 0; j < size; j++ {
 			xlow := float64(i) / float64(size)
 			xhigh := float64(i+1) / float64(size)
 			ylow := float64(j) / float64(size)
 			yhigh := float64(j+1) / float64(size)
-			c := M.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
+			px := C.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
 			img.px[i][j] = color.RGBA{
-				uint8(_map(c.R) * 255.0),
-				uint8(_map(c.G) * 255.0),
-				uint8(_map(c.B) * 255.0),
+				uint8(_map(px.R) * 255.0),
+				uint8(_map(px.G) * 255.0),
+				uint8(_map(px.B) * 255.0),
 				255,
 			}
 		}
-		// wg.Done()
-		// }(i)
 	}
-	// wg.Wait()
 	return img
 }
 
@@ -481,9 +533,21 @@ func (M Module) String() string {
 	return s
 }
 
-var rmodule = regexp.MustCompile(`\((.*)\)([_a-zA-Z]*)\((.*)\)\[(.*)\]`)
+func (C Circuit) String() (s string) {
+	i := 0
+	for _, mod := range C.Modules {
+		if i > 0 {
+			s += ";"
+		}
+		s += mod.String()
+		i++
+	}
+	return
+}
 
-func readModule(s string) (mod Module, err error) {
+var rmodule = regexp.MustCompile(`\((.*)\)(.*)\((.*)\)\[(.*)\]`)
+
+func parseModule(s string) (mod Module, err error) {
 	if len(s) == 0 {
 		err = fmt.Errorf("Module is empty")
 		return
@@ -498,7 +562,11 @@ func readModule(s string) (mod Module, err error) {
 	inputs := match[3]
 	body := match[4]
 
+	if _, ok := OperatorInfo[name]; ok {
+		return mod, fmt.Errorf("Module name '%s' is reserved", name)
+	}
 	mod.Name = name
+
 	for _, c := range inputs {
 		mod.Inputs = append(mod.Inputs, []int{})
 		mod.InputNames = append(mod.InputNames, c)
@@ -539,14 +607,21 @@ func readModule(s string) (mod Module, err error) {
 		var node *Node
 
 		if info, ok := OperatorInfo[op]; !ok {
-			// An input
-			k := mod.inputIndex(rune(op[0]))
-			if k == -1 {
-				err = fmt.Errorf("node '%s' is not an operator nor an input", op)
-				return
-			}
+			// An input or a call
 			node = &Node{Op: op}
-			mod.Inputs[k] = append(mod.Inputs[k], i)
+			k := mod.inputIndex(rune(op[0]))
+			if k != -1 { // An input
+				mod.Inputs[k] = append(mod.Inputs[k], i)
+			} else {
+				for {
+					var arg int
+					n, err := fmt.Fscanf(rnod, "%d", &arg)
+					if n != 1 || err != nil {
+						break
+					}
+					node.Args = append(node.Args, arg)
+				}
+			}
 		} else {
 			if op == "=" {
 				// A constant
@@ -582,13 +657,56 @@ func readModule(s string) (mod Module, err error) {
 	return
 }
 
-func Read(s string) (mod Module, err error) {
-	mod, err = readModule(s)
+func readModule(s string) (mod Module, err error) {
+	mod, err = parseModule(s)
 	if err != nil {
 		return
 	}
 	mod.TopologicalSort()
 	mod = mod.TreeShake(mod.Outputs...)
+	return
+}
+
+func Read(s string) (C Circuit, err error) {
+	C.Modules = make(map[string]Module)
+	smodules := strings.Split(s, ";")
+	for _, smod := range smodules {
+		mod, err := parseModule(smod)
+		if err != nil {
+			return C, err
+		}
+		mod.TopologicalSort()
+		if _, ok := C.Modules[mod.Name]; !ok {
+			C.Modules[mod.Name] = mod.TreeShake(mod.Outputs...)
+		} else {
+			return C, fmt.Errorf("There is already a module named '%s'", mod.Name)
+		}
+	}
+	// There is a main module, with an empty name.
+	main, ok := C.Modules[""]
+	if !ok {
+		return C, fmt.Errorf("There is no main module (with empty name)")
+	}
+	// The main module has rgb as outputs.
+	if names := main.OutputNamesAsString(); names != "rgb" {
+		return C, fmt.Errorf("Outputs != 'rgb'! (outputs = '%s')", names)
+	}
+
+	// All modules except main have 1 output
+	for name, module := range C.Modules {
+		if module.Name != "" && len(module.Outputs) != 1 {
+			return C, fmt.Errorf("Module '%s' has more than one output", name)
+		}
+	}
+
+	// Determine which nodes are calls to other modules
+	for name, mod := range C.Modules {
+		for i, node := range mod.Nodes {
+			if _, ok := C.Modules[node.Op]; ok {
+				C.Modules[name].Nodes[i].Call = true
+			}
+		}
+	}
 	return
 }
 

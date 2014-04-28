@@ -2,6 +2,7 @@ package evoimage
 
 import (
 	"testing"
+	"math"
 )
 
 func TestRead(t *testing.T) {
@@ -47,7 +48,7 @@ func TestRead(t *testing.T) {
 
 	// test read (no topological sort, no treeshake)
 	for _, c := range cases {
-		e1, err := readModule(c.a)
+		e1, err := parseModule(c.a)
 		if err != nil {
 			t.Errorf("Cannot read expression '%s': %s", c, err)
 		}
@@ -73,6 +74,59 @@ func TestRead(t *testing.T) {
 	}
 }
 
+func TestTopologicalSort(t *testing.T) {
+	cases := []struct{ a, b string }{
+		{
+			"(rgb)(xy)[rgb:  x|y |y]",
+			"(rgb)(xy)[rgb:x|y|y]",
+		}, {
+			"(rbg)(xyr)[rgb:  + 1  2 | x| y | r]",
+			"(rbg)(xyr)[rbg:+ 1 2|x|y|r]",
+		}, {
+			"(rgb)(xy)[r:x|g:y|b:+ 0 1]",
+			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
+		}, {
+			"(bgr)(xyr)[r:+ 1 3 | g:x|  b: r| y]",
+			"(bgr)(xyr)[r:+ 1 3|g:x|b:r|y]",
+		}, {
+			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
+			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
+		}, {
+			"(ijk)(xy)[= 1|i:+ 2 3|jk:x|y]",
+			"(ijk)(xy)[i:+ 2 3|= 1|jk:x|y]",
+		}, {
+			"(abc)(xy)[x|+ 2 4|ab:x|y|c:y]",
+			"(abc)(xy)[+ 2 4|x|ab:x|y|c:y]",
+		}, {
+			"(rgb)(xy)[r:x|g:y|b:y]",
+			"(rgb)(xy)[r:x|g:y|b:y]",
+		}, {
+			"(uvw)(xy)[uv:x|x|w:y]",
+			"(uvw)(xy)[uv:x|x|w:y]",
+		}, {
+			"(rgb)()[rgb:= 1|= 2|= 3]",
+			"(rgb)()[rgb:= 1|= 2|= 3]",
+		}, {
+			"(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
+			"(rgb)(xy)[rgb:lerp 1 3 2|inv 3|band 4|x|y]",
+		}, {
+			"(rgb)(x)[rgb:* 1 2|x|inv 1]",
+			"(rgb)(x)[rgb:* 2 1|inv 2|x]",
+		},
+	}
+	// test topological sort only
+	for _, c := range cases {
+		e1, err := parseModule(c.a)
+		if err != nil {
+			t.Errorf("Cannot read expression '%s': %s", c, err)
+		}
+		e1.TopologicalSort()
+		if s1 := e1.String(); s1 != c.b {
+			t.Errorf("Error: topological sort of '%s' gives '%s' (should be '%s')", c.a, s1, c.b)
+		}
+	}
+}
+
 func TestSortAndTreeShake(t *testing.T) {
 	cases := []struct{ a, b string }{
 		{
@@ -82,11 +136,11 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(rbg)(xyr)[rgb:  + 1  2 | x| y | r]",
 			"(rbg)(xy)[rbg:+ 1 2|x|y]",
 		}, {
-			"(bgr)(xyr)[r:+ 1 3 | g:x|  b: r| y]",
-			"(bgr)(xyr)[b:r|g:x|r:+ 1 3|y]",
+			"(bgr)(xyr)[r:+ 1 3 | g:x|  b: r| y |bla]",
+			"(bgr)(xyr)[r:+ 1 3|g:x|b:r|y]",
 		}, {
 			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
-			"(bgr)(xyr)[b:r|g:x|r:+ 0 3|y]",
+			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
 		}, {
 			"(ijk)(xy)[i:+ 2 3|= 1|jk:x|y]",
 			"(ijk)(xy)[i:+ 1 2|jk:x|y]",
@@ -94,8 +148,14 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(abc)(xy)[+ 2 4|x|ab:x|y|c:y]",
 			"(abc)(xy)[ab:x|c:y]",
 		}, {
+			"(abc)(xy)[a:+ 2 4|x|b:x|y|c:y]",
+			"(abc)(xy)[a:+ 1 2|b:x|c:y]",
+		}, {
 			"(rgb)(xy)[r:x|g:y|b:y]",
 			"(rgb)(xy)[r:x|g:y|b:y]",
+		}, {
+			"(rgb)(xy)[r:x|g:y|b:+ 0 1]",
+			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
 		}, {
 			"(uvw)(xy)[uv:x|x|w:y]",
 			"(uvw)(xy)[uv:x|w:y]",
@@ -119,7 +179,7 @@ func TestSortAndTreeShake(t *testing.T) {
 
 	// test read (no topological sort, no treeshake)
 	for _, c := range cases {
-		e1, err := Read(c.a)
+		e1, err := readModule(c.a)
 		if err != nil {
 			t.Errorf("Cannot read expression '%s': %s", c, err)
 		}
@@ -129,33 +189,123 @@ func TestSortAndTreeShake(t *testing.T) {
 	}
 }
 
+func TestReadModuleName(t *testing.T) {
+	cases := []struct{ a, b string }{
+		{
+			"(rgb)asdf(xy)[rgb:x|y|y]",
+			"asdf",
+		},
+	}
+	for _, c := range cases {
+		m, _ := readModule(c.a)
+		if m.Name != c.b {
+			t.Errorf("Module '%s' should have name '%s' (has '%s')", c.a, c.b, m.Name)
+		}
+	}
+}
+
 func TestEvalNodes(t *testing.T) {
-	e, err := Read("(a)(xy)[a:+ 1 2|x|y]")
+	e, err := readModule("(a)(xy)[a:+ 1 2|x|y]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
 	for x := 0.1; x < 1.0; x += .1 {
 		e.SetInputs([]float64{x, .5})
-		if e.EvalNodes(1); e.Nodes[1].Value != x {
+		if e.EvalNodes(nil, 1); e.Nodes[1].Value != x {
 			t.Errorf("Node 1 in '%s' should eval to %g", e.String(), x)
 		}
 		e.SetInputs([]float64{0, x})
-		if e.EvalNodes(2); e.Nodes[2].Value != x {
+		if e.EvalNodes(nil, 2); e.Nodes[2].Value != x {
 			t.Errorf("Node 2 in '%s' should eval to %g", e.String(), x)
 		}
 	}
-	e, err = Read("(y)(x)[y:+ 1 2|x|= 0.5]")
+	e, err = readModule("(y)(x)[y:+ 1 2|x|= 0.5]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
 	for x := 0.1; x < 0.5; x += .05 {
-		if out := e.Eval([]float64{x}); out[0] != ((x + 0.5) / 2.0) {
+		if out := e.Eval(nil, []float64{x}); out[0] != ((x + 0.5) / 2.0) {
 			t.Errorf("'%s' should eval to %g (evals to %g)",
 				e.String(), ((x + 0.5) / 2.0), out[0])
 		}
 	}
-	e, err = Read("(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]")
+	e, err = readModule("(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
+	}
+}
+
+func TestReadErrorsCircuit(t *testing.T) {
+	cases := []struct{ smod, serror string }{
+		{
+			"(rgb)asdf(xy)[rgb:x|y|y]",
+			"There is no main module",
+		}, {
+			"(r)(x)[r:x]",
+			"Outputs != 'rgb'!",
+		}, {
+			"(abc)(x)[abc:x]",
+			"Outputs != 'rgb'!",
+		}, {
+			"(rgb)(xyrt)[r:+ 1 2|g:+ 3 4|b:sum 5 6|x|y|r|t];(fg)sum(xy)[f:+ 1 2|g:x|y]",
+			"Module 'sum' has more than one output",
+		},
+	}
+	for _, cas := range cases {
+		_, err := Read(cas.smod)
+		if err == nil ||
+			len(err.Error()) < len(cas.serror) ||
+			err.Error()[:len(cas.serror)] != cas.serror {
+			t.Errorf("Read should give '%s' error for '%s'", cas.serror, cas.smod)
+			if err != nil {
+				t.Logf("Error given is '%s'", err)
+			} else {
+				t.Log("No error given")
+			}
+		}
+	}
+}
+
+func TestCircuitEval(t *testing.T) {
+	cases := []struct{ 
+		circuit string
+		inputs  []float64
+		outputs []float64
+	}{
+		{
+			"(rgb)(xy)[r:x|gb:y]",
+			[]float64{0.1, 0.9},
+			[]float64{0.1, 0.9, 0.9},
+		}, {
+			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
+			[]float64{0.2, 0.4},
+			[]float64{0.2, 0.4, 0.3},
+		}, {
+			"(rgb)(x)[rgb:mod1 1|x];(x)mod1(y)[x:y]",
+			[]float64{0.5},
+			[]float64{0.5, 0.5, 0.5},
+		}, {
+			"(rgb)(xy)[r:mult 1 2|g:x|b:y];(f)mult(xy)[f:* 1 2|x|y]",
+			[]float64{0.5, 0.3},
+			[]float64{0.15, 0.5, 0.3},
+		},
+	}
+	for _, cas := range cases {
+		C, err := Read(cas.circuit)
+		if err != nil {
+			t.Errorf("Cannot read '%s': %s", cas.circuit, err)
+		}
+		outputs := C.Eval(cas.inputs)
+		if len(outputs) != len(cas.outputs) {
+			t.Errorf("Different number of outputs for '%s': %#v versus %#v", 
+				cas.circuit, outputs, cas.outputs)
+		} else {
+			for i := range outputs {
+				if math.Abs(outputs[i] - cas.outputs[i]) > 1e-9 {
+					t.Errorf("Different value for output %d: %f vs. %f", i, outputs[i], cas.outputs[i])
+					t.Logf("Difference = %f", outputs[i] - cas.outputs[i])
+				}
+			}
+		}
 	}
 }
