@@ -171,7 +171,7 @@ func (M Module) TopologicalSort() {
 			}
 		}
 	}
-	// Reconstructo Outputs
+	// Reconstruct Outputs
 	for i := range M.Outputs {
 		M.Outputs[i] = _Nodes[M.Outputs[i]].NewPos
 	}
@@ -554,7 +554,7 @@ func parseModule(s string) (mod Module, err error) {
 	}
 	match := rmodule.FindStringSubmatch(s)
 	if len(match) != 5 {
-		err = fmt.Errorf("Modules must have a format like `(abc)name(xyz)[...]`")
+		err = fmt.Errorf("Modules must have format `(abc)name(xyz)[...]`")
 		return
 	}
 	outputs := match[1]
@@ -596,6 +596,11 @@ func parseModule(s string) (mod Module, err error) {
 			return
 		}
 
+		if snod == "" {
+			err = fmt.Errorf("Empty node")
+			return
+		}
+		
 		var op string
 		rnod := strings.NewReader(snod)
 		n, err2 := fmt.Fscanf(rnod, "%s", &op)
@@ -653,6 +658,24 @@ func parseModule(s string) (mod Module, err error) {
 	if len(mod.Outputs) == 0 {
 		err = fmt.Errorf("Error in module: there are no outputs")
 		return
+	}
+
+	// check missing outputs
+	for i := range mod.Outputs {
+		if mod.Outputs[i] == -1 {
+			err = fmt.Errorf("Missing output `%c`", mod.OutputNames[i])
+			return
+		}
+	}
+
+	// check missing nodes
+	for _, node := range mod.Nodes {
+		for _, arg := range node.Args {
+			if arg < 0 || arg >= len(mod.Nodes) {
+				err = fmt.Errorf("Nonexistent node %d", arg)
+				return
+			}
+		}
 	}
 	return
 }

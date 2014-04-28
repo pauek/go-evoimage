@@ -5,7 +5,41 @@ import (
 	"math"
 )
 
-func TestRead(t *testing.T) {
+func TestReadErrorsModule(t *testing.T) {
+	cases := []struct{ smod, serror string }{
+		{
+			"[x|y|y]",
+			"Modules must have format `(abc)name(xyz)[...]`",
+		}, {
+			"(y)f(ab)[+ 1 2|a|b]",
+			"Missing output `y`",
+		}, {
+			"",                        // empty string
+			"Module is empty",
+		}, {
+			"()()[]",                  // empty expression
+			"Empty node",
+		}, {
+			"(x)()[x:+ 1 2]",          // missing nodes
+			"Nonexistent node 1",
+		},
+	}
+	for _, cas := range cases {
+		_, err := readModule(cas.smod)
+		if err == nil ||
+			len(err.Error()) < len(cas.serror) ||
+			err.Error()[:len(cas.serror)] != cas.serror {
+			t.Errorf("Read should give '%s' error for '%s'", cas.serror, cas.smod)
+			if err != nil {
+				t.Logf("Error given is '%s'", err)
+			} else {
+				t.Log("No error given")
+			}
+		}
+	}
+}
+
+func TestParseModule(t *testing.T) {
 	cases := []struct{ a, b string }{
 		{
 			"(rgb)main(xy)[rgb:  x|y |y]",
@@ -56,23 +90,8 @@ func TestRead(t *testing.T) {
 			t.Errorf("Error: reading '%s' gives '%s' (should be '%s')", c.a, s1, c.b)
 		}
 	}
-
-	// missing outputs
-	no_outputs := "[x|y|y]"
-	_, err := readModule(no_outputs)
-	if err == nil {
-		t.Errorf("Reading should give an error and it doesn't for '%s'", no_outputs)
-	}
-
-	// empty expression
-	empty := []string{"[]", ""}
-	for _, e := range empty {
-		_, err := readModule(e)
-		if err == nil {
-			t.Errorf("Reading should give an error and it doesn't for '%s'", e)
-		}
-	}
 }
+
 
 func TestTopologicalSort(t *testing.T) {
 	cases := []struct{ a, b string }{
@@ -130,14 +149,14 @@ func TestTopologicalSort(t *testing.T) {
 func TestSortAndTreeShake(t *testing.T) {
 	cases := []struct{ a, b string }{
 		{
-			"(rgb)(xy)[rgb:  x|y |y]",
-			"(rgb)(x)[rgb:x]",
+			"(rgb)A1(xy)[rgb:  x|y |y]",
+			"(rgb)A1(x)[rgb:x]",
 		}, {
-			"(rbg)(xyr)[rgb:  + 1  2 | x| y | r]",
-			"(rbg)(xy)[rbg:+ 1 2|x|y]",
+			"(rbg)A2(xyr)[rgb:  + 1  2 | x| y | r]",
+			"(rbg)A2(xy)[rbg:+ 1 2|x|y]",
 		}, {
-			"(bgr)(xyr)[r:+ 1 3 | g:x|  b: r| y |bla]",
-			"(bgr)(xyr)[r:+ 1 3|g:x|b:r|y]",
+			"(bgr)pauek(xyr)[r:+ 1 3 | g:x|  b: r| y |bla]",
+			"(bgr)pauek(xyr)[r:+ 1 3|g:x|b:r|y]",
 		}, {
 			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
 			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
@@ -157,10 +176,10 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(rgb)(xy)[r:x|g:y|b:+ 0 1]",
 			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
 		}, {
-			"(uvw)(xy)[uv:x|x|w:y]",
+			"(uvw)(xyr)[uv:x|x|w:y]",
 			"(uvw)(xy)[uv:x|w:y]",
 		}, {
-			"(rgb)()[rgb:= 1|= 2|= 3]",
+			"(rgb)(x)[rgb:= 1|= 2|= 3]",
 			"(rgb)()[rgb:= 1]",
 		}, {
 			"(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
