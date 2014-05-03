@@ -465,7 +465,7 @@ func (C Circuit) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Colo
 	var c Color
 	for i := 0; i < len(S); i += 2 {
 		x, y := S[i], S[i+1]
-		_x, _y := x - .5, y - .5
+		_x, _y := x-.5, y-.5
 		r := math.Sqrt(_x*_x + _y*_y)
 		t := math.Atan2(_y, _x)
 		inputs := []float64{x, y, r, t}
@@ -600,7 +600,7 @@ func parseModule(s string) (mod Module, err error) {
 			err = fmt.Errorf("Empty node")
 			return
 		}
-		
+
 		var op string
 		rnod := strings.NewReader(snod)
 		n, err2 := fmt.Fscanf(rnod, "%s", &op)
@@ -648,7 +648,7 @@ func parseModule(s string) (mod Module, err error) {
 					node.Args = append(node.Args, arg)
 				}
 				if info.Nargs != len(node.Args) {
-					err = fmt.Errorf("Error in node %d: `%s` has %d args, not %d.", 
+					err = fmt.Errorf("Error in node %d: `%s` has %d args, not %d.",
 						i, op, info.Nargs, len(node.Args))
 					return
 				}
@@ -706,17 +706,17 @@ func Read(s string) (C Circuit, err error) {
 			return C, fmt.Errorf("Duplicated module `%s`.", mod.Name)
 		}
 	}
-	// There is a main module, with an empty name.
+	// Checks:
+	// 1) There is a main module, with an empty name.
 	main, ok := C.Modules[""]
 	if !ok {
 		return C, fmt.Errorf("There is no main module (with empty name)")
 	}
-	// The main module has rgb as outputs.
+	// 2) The main module has rgb as outputs.
 	if names := main.OutputNamesAsString(); names != "rgb" {
 		return C, fmt.Errorf("Outputs != 'rgb'! (outputs = '%s')", names)
 	}
-
-	// All modules except main have 1 output
+	// 3) All modules except main have 1 output
 	for name, module := range C.Modules {
 		if module.Name != "" && len(module.Outputs) != 1 {
 			return C, fmt.Errorf("Module '%s' has more than one output", name)
@@ -728,7 +728,7 @@ func Read(s string) (C Circuit, err error) {
 	for name, mod := range C.Modules {
 		isInput := make(map[string]bool)
 		for i := range mod.InputNames {
-			sname := fmt.Sprintf("%c", mod.InputNames[i]) 
+			sname := fmt.Sprintf("%c", mod.InputNames[i])
 			isInput[sname] = true
 		}
 		for i, node := range mod.Nodes {
