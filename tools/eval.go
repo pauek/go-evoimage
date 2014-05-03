@@ -17,7 +17,7 @@ var (
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.IntVar(&Size, "s", 500, "Image size")
-	flag.IntVar(&Samples, "k", 1, "Image size")
+	flag.IntVar(&Samples, "k", 1, "Number of samples per pixel")
 	flag.Parse()
 
 	args := flag.Args()
