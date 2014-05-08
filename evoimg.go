@@ -41,11 +41,13 @@ var NumArguments = map[int][]string{
 	3: {"lerp", "if"},
 }
 
+var Operators = []string{}
 var OperatorInfo = make(map[string]OpInfo)
 
 func init() {
 	for nargs, ops := range NumArguments {
 		for _, op := range ops {
+			Operators = append(Operators, op)
 			OperatorInfo[op] = OpInfo{
 				Nargs: nargs,
 			}
@@ -521,6 +523,56 @@ func (M Module) String() string {
 	}
 	s += "]"
 	return s
+}
+
+func RandomModule(inputs, outputs string, numnodes int) (M Module) {
+	for _, c := range inputs {
+		M.InputNames = append(M.InputNames, c)
+	}
+	for _, c := range outputs {
+		M.OutputNames = append(M.OutputNames, c)
+	}
+	// Add Input nodes
+	for i := range M.InputNames {
+		M.Nodes = append(M.Nodes, &Node{
+			Op: fmt.Sprintf("%c", M.InputNames[i]),
+		})
+	}
+	// Generate nodes
+	curr := len(M.InputNames)
+	for i := 0; i < numnodes; i++ {
+		iop := rand.Intn(len(Operators))
+		op := Operators[iop]
+		info := OperatorInfo[op]
+		args := []int{}
+		val := 0.0
+		if op == "=" {
+			val = rand.Float64()
+		} else {
+			for i := 0; i < info.Nargs; i++ {
+				args = append(args, rand.Intn(curr))
+			}
+		}
+		M.Nodes = append(M.Nodes, &Node{
+			Op:    op,
+			Args:  args,
+			Value: val,
+		})
+		curr++
+	}
+	// Assign outputs
+	for _ = range M.OutputNames {
+		M.Outputs = append(M.Outputs, rand.Intn(curr))
+	}
+	M.reconstructInputs()
+	M.TopologicalSort()
+	return M.TreeShake(M.Outputs...)
+}
+
+func RandomCircuit(numnodes int) (C Circuit) {
+	C.Modules = make(map[string]Module)
+	C.Modules[""] = RandomModule("xyrt", "rgb", numnodes)
+	return C
 }
 
 func (C Circuit) String() (s string) {
