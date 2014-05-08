@@ -1,0 +1,1 @@
+(rgb)(xyrt)[b:* 11 1|inv 2|if 8 19 3|not 4|not 5|+ 13 7|r:xor 8 12|and 9 21|and 23 10|xor 22 14|band 14|sin 15|not 16|* 17 14|lerp 23 18 20|sin 18|sin 18|band 22|g:lerp 23 22 21|= 0.05584308786817994|y|r|x|t]

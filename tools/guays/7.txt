@@ -1,0 +1,1 @@
+(rgb)(xyrt)[r:* 1 7|id 2|inv 5|g:if 15 4 6|sin 8|b:if 8 9 16|lerp 9 19 14|* 11 9|xor 10 16|sin 13|band 12|xor 14 16|band 18|sin 16|cos 19|bw 17|r|= 0.49367098600735576|x|t]

@@ -1,0 +1,1 @@
+(rgb)(xyrt)[r:lerp 7 1 2|* 4 3|xor 4 8|lerp 8 6 10|cos 9|g:sin 9|b:or 7 8|y|r|t|x]
