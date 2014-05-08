@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"io"
 	"math"
 	"math/rand"
 	"regexp"
@@ -110,6 +111,7 @@ func (M Module) Size() int {
 func (M Module) OutputNamesAsString() (s string) {
 	for _, c := range M.OutputNames {
 		s += fmt.Sprintf("%c", c)
+
 	}
 	return s
 }
@@ -793,6 +795,33 @@ func Read(s string) (C Circuit, err error) {
 		}
 	}
 	return
+}
+
+func (C Circuit) Graphviz(w io.Writer) {
+	fmt.Fprintf(w, "digraph Circuit {\n")
+	for name, mod := range C.Modules {
+		if name == "" {
+			name = "main"
+		}
+		fmt.Fprintf(w, "   subgraph %s {\n", name)
+		for i, node := range mod.Nodes {
+			if node.Op == "=" {
+				fmt.Fprintf(w, "      %d [label=\"%.2f\",shape=diamond,style=filled,color=\"#99aaff\"]", i, node.Value)
+			} else {
+				fmt.Fprintf(w, "      %d [label=\"%s\"];\n", i, node.Op)
+				for _, arg := range node.Args {
+					fmt.Fprintf(w, "      %d -> %d;\n", arg, i)
+				}
+			}
+		}
+		for i, out := range mod.Outputs {
+			k := len(mod.Nodes) + i
+			fmt.Fprintf(w, "      %d [label=\"%c\",shape=square,style=filled];\n", k, mod.OutputNames[i])
+			fmt.Fprintf(w, "      %d -> %d\n", out, k)
+		}
+		fmt.Fprintf(w, "   }\n")
+	}
+	fmt.Fprintf(w, "}\n")
 }
 
 // Image
