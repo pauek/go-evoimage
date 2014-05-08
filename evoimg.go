@@ -112,6 +112,18 @@ func (M Module) OutputNamesAsString() (s string) {
 	return s
 }
 
+func (M *Module) reconstructInputs() {
+	M.Inputs = make([][]int, len(M.InputNames))
+	for i, v := range M.InputNames {
+		name := fmt.Sprintf("%c", v)
+		for j, node := range M.Nodes {
+			if node.Op == name {
+				M.Inputs[i] = append(M.Inputs[i], j)
+			}
+		}
+	}
+}
+
 func (M *Module) TopologicalSort() {
 	_Nodes := make([]*_Node, len(M.Nodes))
 	for i := range M.Nodes {
@@ -160,20 +172,11 @@ func (M *Module) TopologicalSort() {
 		}
 		M.Nodes[i] = &sorted_Nodes[i].Node
 	}
-	// Reconstruct Inputs
-	M.Inputs = make([][]int, len(M.InputNames))
-	for i, v := range M.InputNames {
-		name := fmt.Sprintf("%c", v)
-		for j, node := range M.Nodes {
-			if node.Op == name {
-				M.Inputs[i] = append(M.Inputs[i], j)
-			}
-		}
-	}
 	// Reconstruct Outputs
 	for i := range M.Outputs {
 		M.Outputs[i] = _Nodes[M.Outputs[i]].NewPos
 	}
+	M.reconstructInputs()
 }
 
 func (M Module) TreeShake(roots ...int) (newM Module) {
@@ -183,10 +186,12 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 	}
 	newM.Name = M.Name
 
-	inputs := make([][]int, len(M.Inputs))
-	inputNames := make([]rune, len(M.InputNames))
-	newM.Outputs = make([]int, len(M.Outputs))
+	newM.InputNames = make([]rune, len(M.InputNames))
+	copy(newM.InputNames, M.InputNames)
 	newM.OutputNames = make([]rune, len(M.OutputNames))
+	copy(newM.OutputNames, M.OutputNames)
+
+	newM.Outputs = make([]int, len(M.Outputs))
 
 	order := make([]int, sz+1)
 	for i := range order {
@@ -225,26 +230,11 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 		for j := range M.Outputs {
 			if i == M.Outputs[j] {
 				newM.Outputs[j] = curr
-				newM.OutputNames[j] = M.OutputNames[j]
-			}
-		}
-		for j := range M.Inputs {
-			for k := range M.Inputs[j] {
-				if i == M.Inputs[j][k] {
-					inputs[j] = append(inputs[j], curr)
-					inputNames[j] = M.InputNames[j]
-				}
 			}
 		}
 		curr++
 	}
-	// remove unused inputs (detect with empty inputnames)
-	for i := range inputs {
-		if len(inputs[i]) > 0 {
-			newM.Inputs = append(newM.Inputs, inputs[i])
-			newM.InputNames = append(newM.InputNames, inputNames[i])
-		}
-	}
+	newM.reconstructInputs()
 	return
 }
 

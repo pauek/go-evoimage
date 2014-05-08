@@ -155,10 +155,10 @@ func TestSortAndTreeShake(t *testing.T) {
 	cases := []struct{ a, b string }{
 		{
 			"(rgb)A1(xy)[rgb:  x|y |y]",
-			"(rgb)A1(x)[rgb:x]",
+			"(rgb)A1(xy)[rgb:x]",
 		}, {
 			"(rbg)A2(xyr)[rgb:  + 1  2 | x| y | r]",
-			"(rbg)A2(xy)[rbg:+ 1 2|x|y]",
+			"(rbg)A2(xyr)[rbg:+ 1 2|x|y]",
 		}, {
 			"(bgr)pauek(xyr)[r:+ 1 3 | g:x|  b: r| y |bla]",
 			"(bgr)pauek(xyr)[r:+ 1 3|g:x|b:r|y]",
@@ -182,10 +182,10 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
 		}, {
 			"(uvw)(xyr)[uv:x|x|w:y]",
-			"(uvw)(xy)[uv:x|w:y]",
+			"(uvw)(xyr)[uv:x|w:y]",
 		}, {
 			"(rgb)(x)[rgb:= 1|= 2|= 3]",
-			"(rgb)()[rgb:= 1]",
+			"(rgb)(x)[rgb:= 1]",
 		}, {
 			"(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
 			"(rgb)(xy)[rgb:lerp 1 3 2|inv 3|band 4|x|y]",
@@ -194,10 +194,10 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(rgb)(x)[rgb:* 2 1|inv 2|x]",
 		}, {
 			"(p)(abc)[p:a|b|c]",
-			"(p)(a)[p:a]",
+			"(p)(abc)[p:a]",
 		}, {
 			"(p)(abc)[p:+ 2 1|b|c]",
-			"(p)(bc)[p:+ 2 1|b|c]",
+			"(p)(abc)[p:+ 2 1|b|c]",
 		},
 	}
 
