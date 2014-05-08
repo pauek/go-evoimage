@@ -4,45 +4,25 @@ import (
 	"flag"
 	"fmt"
 	eimg "go-evoimage"
-	"image/png"
 	"math/rand"
-	"os"
 	"runtime"
 	"time"
 )
 
 var (
-	NumNodes  int
-	PrintOnly bool
-	Graphviz  bool
+	NumCircuits int
+	NumNodes    int
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	flag.IntVar(&NumNodes, "n", 5, "Number of nodes in random module")
-	flag.BoolVar(&PrintOnly, "p", false, "Only Print expression")
-	flag.BoolVar(&Graphviz, "g", false, "Print Graphviz")
+	flag.IntVar(&NumCircuits, "n", 1, "Number of circuits to generate")
+	flag.IntVar(&NumNodes, "k", 5, "Number of nodes in random module")
 	flag.Parse()
-	e := eimg.RandomCircuit(NumNodes)
-	if Graphviz {
-		e.Graphviz(os.Stdout)
-		fmt.Fprintln(os.Stderr, e)
-	} else {
-		fmt.Println(e)
-	}
 
-	if !PrintOnly {
-		img := e.Render(500, 5)
-		f, err := os.Create("img.png")
-		if err != nil {
-			fmt.Printf("Cannot open 'img.png': %s", err)
-			os.Exit(1)
-		}
-		err = png.Encode(f, img)
-		if err != nil {
-			fmt.Printf("Cannot encode PNG: %s", err)
-			os.Exit(1)
-		}
+	for i := 0; i < NumCircuits; i++ {
+		e := eimg.RandomCircuit(NumNodes)
+		fmt.Println(e)
 	}
 }
