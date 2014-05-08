@@ -110,6 +110,15 @@ func (M Module) Size() int {
 	return len(M.Nodes)
 }
 
+func (M Module) isInput(n int) bool {
+	for i := range M.Inputs {
+		if M.Inputs[i].Idx == n {
+			return true
+		}
+	}
+	return false
+}
+
 func (M Module) OutputNamesAsString() (s string) {
 	for _, outp := range M.Outputs {
 		s += fmt.Sprintf("%c", outp.Name)
@@ -827,20 +836,49 @@ func (C Circuit) Graphviz(w io.Writer) {
 			name = "main"
 		}
 		fmt.Fprintf(w, "   subgraph %s {\n", name)
+
+		// Inputs
+		fmt.Fprintf(w, "      { rank = same;\n")
+		for _, port := range mod.Inputs {
+			fmt.Fprintf(w, `      %d [label="%c",shape=square,style=filled];`,
+				port.Idx, port.Name)
+			fmt.Fprintln(w)
+		}
+		fmt.Fprintf(w, "      }\n")
+
+		// Outputs
+		fmt.Fprintf(w, "      { rank = same;\n")
+		for i, _ := range mod.Outputs {
+			k := len(mod.Nodes) + i
+			fmt.Fprintf(w, "      %d [label=\"%c\",shape=square,style=filled];\n",
+				k, mod.Outputs[i].Name)
+		}
+		fmt.Fprintf(w, "      }\n")
+
+		// Middle nodes
 		for i, node := range mod.Nodes {
+			if mod.isInput(i) {
+				continue
+			}
 			if node.Op == "=" {
-				fmt.Fprintf(w, "      %d [label=\"%.2f\",shape=diamond,style=filled,color=\"#99aaff\"]", i, node.Value)
+				fmt.Fprintf(w, `      %d [label="%.2f",shape=diamond,style=filled,color="#99aaff"]`,
+					i, node.Value)
 			} else {
-				fmt.Fprintf(w, "      %d [label=\"%s\"];\n", i, node.Op)
-				for _, arg := range node.Args {
-					fmt.Fprintf(w, "      %d -> %d;\n", arg, i)
-				}
+				fmt.Fprintf(w, `      %d [label="%s"];`, i, node.Op)
+			}
+			fmt.Fprintln(w)
+		}
+
+		// Links
+		for i, node := range mod.Nodes {
+			for _, arg := range node.Args {
+				fmt.Fprintf(w, `      %d -> %d;`, arg, i)
+				fmt.Fprintln(w)
 			}
 		}
 		for i, out := range mod.Outputs {
 			k := len(mod.Nodes) + i
-			fmt.Fprintf(w, "      %d [label=\"%c\",shape=square,style=filled];\n", k, mod.Outputs[i].Name)
-			fmt.Fprintf(w, "      %d -> %d\n", out, k)
+			fmt.Fprintf(w, "      %d -> %d\n", out.Idx, k)
 		}
 		fmt.Fprintf(w, "   }\n")
 	}
