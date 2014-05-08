@@ -362,8 +362,10 @@ func (M Module) SetInputs(inputs []float64) {
 	}
 	for i := range M.Inputs {
 		k := M.Inputs[i].Idx
-		M.Nodes[k].Value = inputs[i]
-		M.Nodes[k].Ready = true
+		if k != -1 {
+			M.Nodes[k].Value = inputs[i]
+			M.Nodes[k].Ready = true
+		}
 	}
 }
 
