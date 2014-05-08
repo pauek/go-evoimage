@@ -71,13 +71,15 @@ type _Node struct {
 	Order  int
 	NewPos int
 }
+type Port struct {
+	Name rune
+	Idx  int
+}
 type Module struct {
-	Name        string
-	Nodes       []*Node
-	Inputs      [][]int
-	InputNames  []rune
-	Outputs     []int
-	OutputNames []rune
+	Name    string
+	Nodes   []*Node
+	Inputs  []Port
+	Outputs []Port
 }
 type Circuit struct {
 	Modules map[string]Module
@@ -109,23 +111,35 @@ func (M Module) Size() int {
 }
 
 func (M Module) OutputNamesAsString() (s string) {
-	for _, c := range M.OutputNames {
-		s += fmt.Sprintf("%c", c)
+	for _, outp := range M.Outputs {
+		s += fmt.Sprintf("%c", outp.Name)
 
 	}
 	return s
 }
 
-func (M *Module) reconstructInputs() {
-	M.Inputs = make([][]int, len(M.InputNames))
-	for i, v := range M.InputNames {
-		name := fmt.Sprintf("%c", v)
+func (M Module) OutputIndices() (indices []int) {
+	indices = make([]int, len(M.Outputs))
+	for i := range M.Outputs {
+		indices[i] = M.Outputs[i].Idx
+	}
+	return
+}
+
+func (M *Module) reconstructInputs() error {
+	for i, inp := range M.Inputs {
+		M.Inputs[i].Idx = -1
+		name := fmt.Sprintf("%c", inp.Name)
 		for j, node := range M.Nodes {
 			if node.Op == name {
-				M.Inputs[i] = append(M.Inputs[i], j)
+				if M.Inputs[i].Idx != -1 {
+					return fmt.Errorf("Duplicate input '%s'", name)
+				}
+				M.Inputs[i].Idx = j
 			}
 		}
 	}
+	return nil
 }
 
 func (M *Module) TopologicalSort() {
@@ -178,7 +192,7 @@ func (M *Module) TopologicalSort() {
 	}
 	// Reconstruct Outputs
 	for i := range M.Outputs {
-		M.Outputs[i] = _Nodes[M.Outputs[i]].NewPos
+		M.Outputs[i].Idx = _Nodes[M.Outputs[i].Idx].NewPos
 	}
 	M.reconstructInputs()
 }
@@ -190,12 +204,19 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 	}
 	newM.Name = M.Name
 
-	newM.InputNames = make([]rune, len(M.InputNames))
-	copy(newM.InputNames, M.InputNames)
-	newM.OutputNames = make([]rune, len(M.OutputNames))
-	copy(newM.OutputNames, M.OutputNames)
+	newM.Inputs = make([]Port, len(M.Inputs))
+	copy(newM.Inputs, M.Inputs)
+	newM.Outputs = make([]Port, len(M.Outputs))
+	copy(newM.Outputs, M.Outputs)
 
-	newM.Outputs = make([]int, len(M.Outputs))
+	reset := func(ports []Port) {
+		for i := range ports {
+			ports[i].Idx = -1
+		}
+	}
+
+	reset(newM.Inputs)
+	reset(newM.Outputs)
 
 	order := make([]int, sz+1)
 	for i := range order {
@@ -232,8 +253,8 @@ func (M Module) TreeShake(roots ...int) (newM Module) {
 		}
 		newM.Nodes = append(newM.Nodes, &newnode)
 		for j := range M.Outputs {
-			if i == M.Outputs[j] {
-				newM.Outputs[j] = curr
+			if i == M.Outputs[j].Idx {
+				newM.Outputs[j].Idx = curr
 			}
 		}
 		curr++
@@ -340,24 +361,22 @@ func (M Module) SetInputs(inputs []float64) {
 		M.Nodes[i].Ready = false
 	}
 	for i := range M.Inputs {
-		for j := range M.Inputs[i] {
-			k := M.Inputs[i][j]
-			M.Nodes[k].Value = inputs[i]
-			M.Nodes[k].Ready = true
-		}
+		k := M.Inputs[i].Idx
+		M.Nodes[k].Value = inputs[i]
+		M.Nodes[k].Ready = true
 	}
 }
 
 func (M Module) GetOutputs() (outputs []float64) {
-	for i := range M.Outputs {
-		outputs = append(outputs, M.Nodes[M.Outputs[i]].Value)
+	for _, outp := range M.Outputs {
+		outputs = append(outputs, M.Nodes[outp.Idx].Value)
 	}
 	return
 }
 
 func (M Module) inputIndex(name rune) (index int) {
 	for i := range M.Inputs {
-		if M.InputNames[i] == name {
+		if M.Inputs[i].Name == name {
 			return i
 		}
 	}
@@ -366,7 +385,7 @@ func (M Module) inputIndex(name rune) (index int) {
 
 func (M Module) outputIndex(name rune) (index int) {
 	for i := range M.Outputs {
-		if M.OutputNames[i] == name {
+		if M.Outputs[i].Name == name {
 			return i
 		}
 	}
@@ -410,7 +429,7 @@ func (M Module) EvalNodes(C *Circuit, roots ...int) {
 
 func (mod Module) Eval(C *Circuit, inputs []float64) (outputs []float64) {
 	mod.SetInputs(inputs)
-	mod.EvalNodes(C, mod.Outputs...)
+	mod.EvalNodes(C, mod.OutputIndices()...)
 	outputs = mod.GetOutputs()
 	return
 }
@@ -422,7 +441,7 @@ func (C Circuit) EvalModule(name string, inputs []float64) (outputs []float64) {
 		panic(msg)
 	}
 	mod.SetInputs(inputs)
-	mod.EvalNodes(&C, mod.Outputs...)
+	mod.EvalNodes(&C, mod.OutputIndices()...)
 	outputs = mod.GetOutputs()
 	return
 }
@@ -491,14 +510,14 @@ func (C Circuit) Render(size, samples int) image.Image {
 
 func (M Module) String() string {
 	s := "("
-	for _, c := range M.OutputNames {
-		s += fmt.Sprintf("%c", c)
+	for _, outp := range M.Outputs {
+		s += fmt.Sprintf("%c", outp.Name)
 	}
 	s += ")"
 	s += M.Name
 	s += "("
-	for _, c := range M.InputNames {
-		s += fmt.Sprintf("%c", c)
+	for _, inp := range M.Inputs {
+		s += fmt.Sprintf("%c", inp.Name)
 	}
 	s += ")"
 	s += "["
@@ -508,8 +527,8 @@ func (M Module) String() string {
 		}
 		colon := ""
 		for j := range M.Outputs {
-			if i == M.Outputs[j] {
-				s += fmt.Sprintf("%c", M.OutputNames[j])
+			if i == M.Outputs[j].Idx {
+				s += fmt.Sprintf("%c", M.Outputs[j].Name)
 				colon = ":"
 			}
 		}
@@ -529,19 +548,19 @@ func (M Module) String() string {
 
 func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 	for _, c := range inputs {
-		M.InputNames = append(M.InputNames, c)
+		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
 	}
 	for _, c := range outputs {
-		M.OutputNames = append(M.OutputNames, c)
+		M.Outputs = append(M.Outputs, Port{Name: c, Idx: -1})
 	}
 	// Add Input nodes
-	for i := range M.InputNames {
+	for i := range M.Inputs {
 		M.Nodes = append(M.Nodes, &Node{
-			Op: fmt.Sprintf("%c", M.InputNames[i]),
+			Op: fmt.Sprintf("%c", M.Inputs[i].Name),
 		})
 	}
 	// Generate nodes
-	curr := len(M.InputNames)
+	curr := len(M.Inputs)
 	for i := 0; i < numnodes; i++ {
 		iop := rand.Intn(len(Operators))
 		op := Operators[iop]
@@ -563,12 +582,12 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 		curr++
 	}
 	// Assign outputs
-	for _ = range M.OutputNames {
-		M.Outputs = append(M.Outputs, rand.Intn(curr))
+	for i := range M.Outputs {
+		M.Outputs[i].Idx = rand.Intn(curr)
 	}
 	M.reconstructInputs()
 	M.TopologicalSort()
-	return M.TreeShake(M.Outputs...)
+	return M.TreeShake(M.OutputIndices()...)
 }
 
 func RandomCircuit(numnodes int) (C Circuit) {
@@ -612,12 +631,10 @@ func parseModule(s string) (mod Module, err error) {
 	mod.Name = name
 
 	for _, c := range inputs {
-		mod.Inputs = append(mod.Inputs, []int{})
-		mod.InputNames = append(mod.InputNames, c)
+		mod.Inputs = append(mod.Inputs, Port{Name: c, Idx: -1})
 	}
 	for _, c := range outputs {
-		mod.Outputs = append(mod.Outputs, -1)
-		mod.OutputNames = append(mod.OutputNames, c)
+		mod.Outputs = append(mod.Outputs, Port{Name: c, Idx: -1})
 	}
 
 	for i, snod := range strings.Split(body, "|") {
@@ -632,7 +649,7 @@ func parseModule(s string) (mod Module, err error) {
 					err = fmt.Errorf("There is no output '%c'", c)
 					return
 				}
-				mod.Outputs[k] = i
+				mod.Outputs[k].Idx = i
 			}
 			snod = parts[1]
 		default:
@@ -660,7 +677,11 @@ func parseModule(s string) (mod Module, err error) {
 			node = &Node{Op: op}
 			k := mod.inputIndex(rune(op[0]))
 			if k != -1 { // An input
-				mod.Inputs[k] = append(mod.Inputs[k], i)
+				if mod.Inputs[k].Idx != -1 {
+					err = fmt.Errorf("Duplicated input '%c'", mod.Inputs[k].Name)
+					return
+				}
+				mod.Inputs[k].Idx = i
 			} else {
 				for {
 					var arg int
@@ -707,8 +728,8 @@ func parseModule(s string) (mod Module, err error) {
 
 	// check missing outputs
 	for i := range mod.Outputs {
-		if mod.Outputs[i] == -1 {
-			err = fmt.Errorf("Missing output `%c`", mod.OutputNames[i])
+		if mod.Outputs[i].Idx == -1 {
+			err = fmt.Errorf("Missing output `%c`", mod.Outputs[i].Name)
 			return
 		}
 	}
@@ -731,7 +752,7 @@ func readModule(s string) (mod Module, err error) {
 		return
 	}
 	mod.TopologicalSort()
-	mod = mod.TreeShake(mod.Outputs...)
+	mod = mod.TreeShake(mod.OutputIndices()...)
 	return
 }
 
@@ -745,7 +766,7 @@ func Read(s string) (C Circuit, err error) {
 		}
 		mod.TopologicalSort()
 		if _, ok := C.Modules[mod.Name]; !ok {
-			C.Modules[mod.Name] = mod.TreeShake(mod.Outputs...)
+			C.Modules[mod.Name] = mod.TreeShake(mod.OutputIndices()...)
 		} else {
 			return C, fmt.Errorf("Duplicated module `%s`.", mod.Name)
 		}
@@ -771,8 +792,8 @@ func Read(s string) (C Circuit, err error) {
 	// + check number of args is correct
 	for name, mod := range C.Modules {
 		isInput := make(map[string]bool)
-		for i := range mod.InputNames {
-			sname := fmt.Sprintf("%c", mod.InputNames[i])
+		for i := range mod.Inputs {
+			sname := fmt.Sprintf("%c", mod.Inputs[i].Name)
 			isInput[sname] = true
 		}
 		for i, node := range mod.Nodes {
@@ -816,7 +837,7 @@ func (C Circuit) Graphviz(w io.Writer) {
 		}
 		for i, out := range mod.Outputs {
 			k := len(mod.Nodes) + i
-			fmt.Fprintf(w, "      %d [label=\"%c\",shape=square,style=filled];\n", k, mod.OutputNames[i])
+			fmt.Fprintf(w, "      %d [label=\"%c\",shape=square,style=filled];\n", k, mod.Outputs[i].Name)
 			fmt.Fprintf(w, "      %d -> %d\n", out, k)
 		}
 		fmt.Fprintf(w, "   }\n")

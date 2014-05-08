@@ -48,8 +48,8 @@ func TestReadErrorsModule(t *testing.T) {
 func TestParseModule(t *testing.T) {
 	cases := []struct{ a, b string }{
 		{
-			"(rgb)main(xy)[rgb:  x|y |y]",
-			"(rgb)main(xy)[rgb:x|y|y]",
+			"(rgb)main(xy)[rgb:  x|y ]",
+			"(rgb)main(xy)[rgb:x|y]",
 		}, {
 			"(xyz)main(xyr)[xyz:  + 1  2 | x| y | r]",
 			"(xyz)main(xyr)[xyz:+ 1 2|x|y|r]",
@@ -60,14 +60,14 @@ func TestParseModule(t *testing.T) {
 			"(mno)ASDF(pqr)[m:+ 2 3|no:p|q|r]",
 			"(mno)ASDF(pqr)[m:+ 2 3|no:p|q|r]",
 		}, {
-			"(rgb)jarl(xry)[  + 2 4  | r:  r|  x| g:r|b:y]",
-			"(rgb)jarl(xry)[+ 2 4|r:r|x|g:r|b:y]",
+			"(rgb)jarl(xryt)[  + 2 4  | r:  r|  x| g:t|b:y]",
+			"(rgb)jarl(xryt)[+ 2 4|r:r|x|g:t|b:y]",
 		}, {
-			"(rgb)(xy)[r:x|g:y|b:y]",
-			"(rgb)(xy)[r:x|g:y|b:y]",
+			"(rgb)(xy)[r:x|g:y|b:= 1]",
+			"(rgb)(xy)[r:x|g:y|b:= 1]",
 		}, {
-			"(rgb)(xy)[rg:x|x|b:y]",
-			"(rgb)(xy)[rg:x|x|b:y]",
+			"(rgb)(xy)[rg:x|= 1|b:y]",
+			"(rgb)(xy)[rg:x|= 1|b:y]",
 		}, {
 			"(rgb)(xry)[r:x|g:r|b:y]",
 			"(rgb)(xry)[r:x|g:r|b:y]",
@@ -78,8 +78,8 @@ func TestParseModule(t *testing.T) {
 			"(rgb)___(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
 			"(rgb)___(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
 		}, {
-			"(uvw)(xy)[uv:x|x|w:y]",
-			"(uvw)(xy)[uv:x|x|w:y]",
+			"(uvw)(xy)[uv:x|= 0|w:y]",
+			"(uvw)(xy)[uv:x|= 0|w:y]",
 		}, {
 			"(rgb)(x)[rgb:* 1 2|x|inv 1]",
 			"(rgb)(x)[rgb:* 1 2|x|inv 1]",
@@ -101,8 +101,8 @@ func TestParseModule(t *testing.T) {
 func TestTopologicalSort(t *testing.T) {
 	cases := []struct{ a, b string }{
 		{
-			"(rgb)(xy)[rgb:  x|y |y]",
-			"(rgb)(xy)[rgb:x|y|y]",
+			"(rgb)(xy)[rgb:  x|y ]",
+			"(rgb)(xy)[rgb:x|y]",
 		}, {
 			"(rbg)(xyr)[rgb:  + 1  2 | x| y | r]",
 			"(rbg)(xyr)[rbg:+ 1 2|x|y|r]",
@@ -119,14 +119,14 @@ func TestTopologicalSort(t *testing.T) {
 			"(ijk)(xy)[= 1|i:+ 2 3|jk:x|y]",
 			"(ijk)(xy)[i:+ 2 3|= 1|jk:x|y]",
 		}, {
-			"(abc)(xy)[x|+ 2 4|ab:x|y|c:y]",
-			"(abc)(xy)[+ 2 4|x|ab:x|y|c:y]",
+			"(abc)(xy)[= 0.2|+ 2 4|ab:x|= 0.3|c:y]",
+			"(abc)(xy)[+ 2 4|= 0.2|ab:x|= 0.3|c:y]",
 		}, {
-			"(rgb)(xy)[r:x|g:y|b:y]",
-			"(rgb)(xy)[r:x|g:y|b:y]",
+			"(rgb)(xy)[r:x|g:y|b:= 2]",
+			"(rgb)(xy)[r:x|g:y|b:= 2]",
 		}, {
-			"(uvw)(xy)[uv:x|x|w:y]",
-			"(uvw)(xy)[uv:x|x|w:y]",
+			"(uvw)(xy)[uv:x|= 5|w:y]",
+			"(uvw)(xy)[uv:x|= 5|w:y]",
 		}, {
 			"(rgb)()[rgb:= 1|= 2|= 3]",
 			"(rgb)()[rgb:= 1|= 2|= 3]",
@@ -154,7 +154,7 @@ func TestTopologicalSort(t *testing.T) {
 func TestSortAndTreeShake(t *testing.T) {
 	cases := []struct{ a, b string }{
 		{
-			"(rgb)A1(xy)[rgb:  x|y |y]",
+			"(rgb)A1(xy)[rgb:  x|y ]",
 			"(rgb)A1(xy)[rgb:x]",
 		}, {
 			"(rbg)A2(xyr)[rgb:  + 1  2 | x| y | r]",
@@ -169,19 +169,19 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(ijk)(xy)[i:+ 2 3|= 1|jk:x|y]",
 			"(ijk)(xy)[i:+ 1 2|jk:x|y]",
 		}, {
-			"(abc)(xy)[+ 2 4|x|ab:x|y|c:y]",
+			"(abc)(xy)[+ 2 4|= 0|ab:x|= 1|c:y]",
 			"(abc)(xy)[ab:x|c:y]",
 		}, {
-			"(abc)(xy)[a:+ 2 4|x|b:x|y|c:y]",
+			"(abc)(xy)[a:+ 2 4|= 0.5|b:x|= 0.2|c:y]",
 			"(abc)(xy)[a:+ 1 2|b:x|c:y]",
 		}, {
-			"(rgb)(xy)[r:x|g:y|b:y]",
-			"(rgb)(xy)[r:x|g:y|b:y]",
+			"(rgb)(xy)[r:x|g:y|b:= 1]",
+			"(rgb)(xy)[r:x|g:y|b:= 1]",
 		}, {
 			"(rgb)(xy)[r:x|g:y|b:+ 0 1]",
 			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
 		}, {
-			"(uvw)(xyr)[uv:x|x|w:y]",
+			"(uvw)(xyr)[uv:x|= 1|w:y]",
 			"(uvw)(xyr)[uv:x|w:y]",
 		}, {
 			"(rgb)(x)[rgb:= 1|= 2|= 3]",
@@ -262,8 +262,11 @@ func TestEvalNodes(t *testing.T) {
 func TestReadErrorsCircuit(t *testing.T) {
 	cases := []struct{ smod, serror string }{
 		{
-			"(rgb)asdf(xy)[rgb:x|y|y]",
+			"(rgb)asdf(xy)[rgb:x|y]",
 			"There is no main module",
+		}, {
+			"(rgb)asdf(xy)[rgb:x|y|y]",
+			"Duplicated input 'y'",
 		}, {
 			"(r)(x)[r:x]",
 			"Outputs != 'rgb'!",
