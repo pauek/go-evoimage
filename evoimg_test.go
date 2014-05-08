@@ -275,7 +275,7 @@ func TestReadErrorsCircuit(t *testing.T) {
 			"Missing module `sum`",
 		}, {
 			"(rgb)(xyrt)[r:+ 1 2|g:+ 3 4|b:sum 5 6|x|y|r|t];(fg)sum(xy)[f:+ 1 2|g:x|y]",
-			"Module 'sum' has more than one output",
+			"Module `sum` has more than one output",
 		}, {
 			"(rgb)(xy)[rgb:sum 1 2|x|y];(f)sum(xyz)[f:+ 1 2|x|+ 3 4|y|z]",
 			"Module `sum` has 3 inputs, not 2.",
@@ -308,7 +308,7 @@ func TestCircuitEval(t *testing.T) {
 	}{
 		{
 			"(rgb)(xy)[r:x|gb:y]",
-			[]float64{0.1, 0.9, /* two extra inputs */ 0.0, 0.0}, 
+			[]float64{0.1, 0.9 /* two extra inputs */, 0.0, 0.0},
 			[]float64{0.1, 0.9, 0.9},
 		}, {
 			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",

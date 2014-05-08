@@ -719,7 +719,7 @@ func Read(s string) (C Circuit, err error) {
 	// 3) All modules except main have 1 output
 	for name, module := range C.Modules {
 		if module.Name != "" && len(module.Outputs) != 1 {
-			return C, fmt.Errorf("Module '%s' has more than one output", name)
+			return C, fmt.Errorf("Module `%s` has more than one output", name)
 		}
 	}
 
