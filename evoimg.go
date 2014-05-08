@@ -568,6 +568,117 @@ func (M Module) String() string {
 	return s
 }
 
+func RandomModule2(inputs, outputs string, numnodes int) (M Module) {
+	for _, c := range inputs {
+		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
+	}
+	for _, c := range outputs {
+		M.Outputs = append(M.Outputs, Port{Name: c, Idx: -1})
+	}
+
+	// 1) Generate nodes without connections
+	for i := 0; i < numnodes; i++ {
+		iop := rand.Intn(len(Operators))
+		op := Operators[iop]
+		info := OperatorInfo[op]
+		args := []int{}
+		val := 0.0
+		if op == "=" {
+			val = rand.Float64()
+		} else {
+			for i := 0; i < info.Nargs; i++ {
+				args = append(args, -1)
+			}
+		}
+		M.Nodes = append(M.Nodes, &Node{
+			Op:    op,
+			Args:  args,
+			Value: val,
+		})
+	}
+	for i := range M.Inputs { // + add Input nodes at the end
+		k := len(M.Nodes)
+		M.Nodes = append(M.Nodes, &Node{
+			Op: fmt.Sprintf("%c", M.Inputs[i].Name),
+		})
+		M.Inputs[i].Idx = k
+	}
+
+	// 2) Set the output of every node to a node below
+	for i := range M.Nodes {
+		// how many inputs below
+		ninputs := 0
+		for j := 0; j < i; j++ {
+			for k := range M.Nodes[j].Args {
+				if M.Nodes[j].Args[k] == -1 {
+					ninputs++
+				}
+			}
+		}
+		noutputs := 0
+		for j := range M.Outputs {
+			if M.Outputs[j].Idx == -1 {
+				noutputs++
+			}
+		}
+
+		if ninputs == 0 && noutputs == 0 {
+			continue
+		}
+
+		r := rand.Intn(ninputs + noutputs)
+
+		if r >= ninputs {
+			// assign to output
+			r -= ninputs
+			for j := range M.Outputs {
+				if M.Outputs[j].Idx == -1 {
+					if r--; r < 0 {
+						M.Outputs[j].Idx = i
+						goto done
+					}
+				}
+			}
+			panic("unreachable1")
+		} else {
+			// assign to input of other node
+			for j := 0; j < i; j++ {
+				for k := range M.Nodes[j].Args {
+					if M.Nodes[j].Args[k] == -1 {
+						if r--; r < 0 {
+							M.Nodes[j].Args[k] = i
+							goto done
+						}
+					}
+				}
+			}
+			panic("didn't assign output!")
+		}
+	done:
+	}
+
+	// 3) Assign at random the remaining links
+	sz := len(M.Nodes)
+	for i := range M.Nodes {
+		for j, a := range M.Nodes[i].Args {
+			if a == -1 {
+				M.Nodes[i].Args[j] = i + 1 + rand.Intn(sz-i-1)
+			}
+		}
+	}
+
+	// 4) Assign at random the remaining outputs
+	for i := range M.Outputs {
+		if M.Outputs[i].Idx == -1 {
+			M.Outputs[i].Idx = rand.Intn(sz)
+		}
+	}
+	M.reconstructInputs()
+	M.TopologicalSort()
+	M.TreeShake()
+	return
+}
+
 func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 	for _, c := range inputs {
 		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
@@ -613,7 +724,7 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 
 func RandomCircuit(numnodes int) (C Circuit) {
 	C.Modules = make(map[string]Module)
-	C.Modules[""] = RandomModule("xyrt", "rgb", numnodes)
+	C.Modules[""] = RandomModule2("xyrt", "rgb", numnodes)
 	return C
 }
 
