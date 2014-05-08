@@ -206,69 +206,80 @@ func (M *Module) TopologicalSort() {
 	M.reconstructInputs()
 }
 
-func (M Module) TreeShake(roots ...int) (newM Module) {
+func (M *Module) TreeShake() {
 	sz := M.Size()
 	if sz == 0 {
 		return
 	}
-	newM.Name = M.Name
 
-	newM.Inputs = make([]Port, len(M.Inputs))
-	copy(newM.Inputs, M.Inputs)
-	newM.Outputs = make([]Port, len(M.Outputs))
-	copy(newM.Outputs, M.Outputs)
+	// First determine which nodes will be kept
+	keep := make([]bool, sz)
+	roots := M.OutputIndices()
 
-	reset := func(ports []Port) {
-		for i := range ports {
-			ports[i].Idx = -1
-		}
-	}
-
-	reset(newM.Inputs)
-	reset(newM.Outputs)
-
-	order := make([]int, sz+1)
-	for i := range order {
-		order[i] = -1
+	// make queue
+	Q := make([]int, sz+1)
+	for i := range Q {
+		Q[i] = -1
 	}
 	top := 0
-	for i := range M.Nodes {
-		if find(i, roots) != -1 {
-			order[top] = i
+
+	qadd := func(i int) { // add to queue
+		if find(i, Q) == -1 {
+			Q[top] = i
 			top++
 		}
 	}
+	for i := range roots {
+		qadd(roots[i])
+	}
 	curr := 0
-	for order[curr] != -1 {
-		i := order[curr]
-		node := M.Nodes[i]
-		newnode := Node{
-			Op:    node.Op,
-			Args:  make([]int, len(node.Args)),
-			Value: node.Value,
-		}
-		for j := i + 1; j < sz; j++ {
-			if k := find(j, node.Args); k != -1 {
-				arg := j
-				l := find(arg, order)
-				if l == -1 {
-					newnode.Args[k] = top
-					order[top] = arg
-					top++
-				} else {
-					newnode.Args[k] = l
-				}
-			}
-		}
-		newM.Nodes = append(newM.Nodes, &newnode)
-		for j := range M.Outputs {
-			if i == M.Outputs[j].Idx {
-				newM.Outputs[j].Idx = curr
-			}
+	for Q[curr] != -1 {
+		i := Q[curr]
+		keep[i] = true
+		for _, a := range M.Nodes[i].Args {
+			qadd(a)
 		}
 		curr++
 	}
-	newM.reconstructInputs()
+
+	// Assign new indices
+	newindex := make([]int, sz)
+	for i := range newindex {
+		newindex[i] = -1
+	}
+	newi := 0
+	for i := range M.Nodes {
+		if !keep[i] {
+			continue
+		}
+		newindex[i] = newi
+		newi++
+	}
+
+	// Translate inputs + outputs
+	for i := range M.Inputs {
+		if M.Inputs[i].Idx != -1 {
+			M.Inputs[i].Idx = newindex[M.Inputs[i].Idx]
+		}
+	}
+	for i := range M.Outputs {
+		if M.Outputs[i].Idx != -1 {
+			M.Outputs[i].Idx = newindex[M.Outputs[i].Idx]
+		}
+	}
+
+	// Keep nodes + translate indices
+	keepnodes := []*Node{}
+	for i, node := range M.Nodes {
+		if !keep[i] {
+			continue
+		}
+		for i := range node.Args {
+			node.Args[i] = newindex[node.Args[i]]
+		}
+		keepnodes = append(keepnodes, node)
+	}
+	M.Nodes = keepnodes
 	return
 }
 
@@ -581,9 +592,7 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 		if op == "=" {
 			val = rand.Float64()
 		} else {
-			for i := 0; i < info.Nargs; i++ {
-				args = append(args, rand.Intn(curr))
-			}
+			args = rand.Perm(curr)[:info.Nargs]
 		}
 		M.Nodes = append(M.Nodes, &Node{
 			Op:    op,
@@ -598,7 +607,8 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 	}
 	M.reconstructInputs()
 	M.TopologicalSort()
-	return M.TreeShake(M.OutputIndices()...)
+	M.TreeShake()
+	return
 }
 
 func RandomCircuit(numnodes int) (C Circuit) {
@@ -763,7 +773,7 @@ func readModule(s string) (mod Module, err error) {
 		return
 	}
 	mod.TopologicalSort()
-	mod = mod.TreeShake(mod.OutputIndices()...)
+	mod.TreeShake()
 	return
 }
 
@@ -776,8 +786,9 @@ func Read(s string) (C Circuit, err error) {
 			return C, err
 		}
 		mod.TopologicalSort()
+		mod.TreeShake()
 		if _, ok := C.Modules[mod.Name]; !ok {
-			C.Modules[mod.Name] = mod.TreeShake(mod.OutputIndices()...)
+			C.Modules[mod.Name] = mod
 		} else {
 			return C, fmt.Errorf("Duplicated module `%s`.", mod.Name)
 		}
