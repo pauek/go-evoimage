@@ -1,0 +1,2 @@
+(rgb)(xyrt)[g:x2 10|noise 80 20|band 50|b:* 40 40|noise 60 90|* 90 70|x|r:y|r|t]
+
