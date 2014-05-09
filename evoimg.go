@@ -2,6 +2,7 @@ package evoimage
 
 import (
 	"fmt"
+	"go-evoimage/perlin"
 	"image"
 	"image/color"
 	"io"
@@ -10,7 +11,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
+
+var pnoise = perlin.NewPerlinNoise(time.Now().UnixNano())
 
 func find(v int, seq []int) int {
 	for i, x := range seq {
@@ -37,8 +41,8 @@ type OpInfo struct {
 }
 
 var NumArguments = map[int][]string{
-	1: {"=", "id", "cos", "sin", "inv", "band", "bw", "not"},
-	2: {"+", "*", "and", "or", "xor"},
+	1: {"=", "x2", "x3", "cos", "sin", "tri", "inv", "band", "bw"},
+	2: {"+", "*", "/", "-", "min", "max", "and", "or", "xor", "noise"},
 	3: {"lerp", "if"},
 }
 
@@ -290,30 +294,38 @@ func (node *Node) eval(M Module) {
 	switch node.Op {
 	case "=":
 		// Value is already there
-	case "id":
-		node.Value = M.Nodes[node.Args[0]].Value
 	case "+":
 		a := M.Nodes[node.Args[0]].Value
 		b := M.Nodes[node.Args[1]].Value
 		node.Value = (a + b) / 2.0
+	case "-":
+		a := M.Nodes[node.Args[0]].Value
+		b := M.Nodes[node.Args[1]].Value
+		node.Value = a - b
 	case "*":
 		a := M.Nodes[node.Args[0]].Value
 		b := M.Nodes[node.Args[1]].Value
 		node.Value = a * b
-	case "cos":
-		f := M.Nodes[node.Args[0]].Value
-		node.Value = (1 + math.Cos(2*math.Pi*f)) / 2
-	case "sin":
-		f := M.Nodes[node.Args[0]].Value
-		node.Value = (1 + math.Sin(2*math.Pi*f)) / 2
-	case "lerp":
-		t := M.Nodes[node.Args[0]].Value
-		A := M.Nodes[node.Args[1]].Value
-		B := M.Nodes[node.Args[2]].Value
-		node.Value = t*A + (1-t)*B
-	case "inv":
+	case "/":
 		a := M.Nodes[node.Args[0]].Value
-		node.Value = (1 - a)
+		b := M.Nodes[node.Args[1]].Value
+		node.Value = a / b
+	case "x2":
+		f := M.Nodes[node.Args[0]].Value
+		if f < .5 {
+			node.Value = 2.0 * f
+		} else {
+			node.Value = 2.0*f - 1
+		}
+	case "x3":
+		f := M.Nodes[node.Args[0]].Value
+		if f < .3333 {
+			node.Value = 3.0 * f
+		} else if f < .6666 {
+			node.Value = 3.0*f - 1
+		} else {
+			node.Value = 3.0*f - 2
+		}
 	case "band":
 		a := M.Nodes[node.Args[0]].Value
 		if a > .33 && a < .66 {
@@ -327,6 +339,38 @@ func (node *Node) eval(M Module) {
 			node.Value = 1.0
 		} else {
 			node.Value = 0.0
+		}
+	case "inv":
+		a := M.Nodes[node.Args[0]].Value
+		node.Value = (1 - a)
+	case "cos":
+		f := M.Nodes[node.Args[0]].Value
+		node.Value = (1 + math.Cos(2*math.Pi*f)) / 2
+	case "sin":
+		f := M.Nodes[node.Args[0]].Value
+		node.Value = (1 + math.Sin(2*math.Pi*f)) / 2
+	case "tri":
+		f := M.Nodes[node.Args[0]].Value
+		if f < .5 {
+			node.Value = 2.0 * f
+		} else {
+			node.Value = 2.0 * (1 - f)
+		}
+	case "max":
+		p := M.Nodes[node.Args[0]].Value
+		q := M.Nodes[node.Args[1]].Value
+		if p > q {
+			node.Value = p
+		} else {
+			node.Value = q
+		}
+	case "min":
+		p := M.Nodes[node.Args[0]].Value
+		q := M.Nodes[node.Args[1]].Value
+		if p < q {
+			node.Value = p
+		} else {
+			node.Value = q
 		}
 	case "and":
 		p := M.Nodes[node.Args[0]].Value
@@ -347,19 +391,20 @@ func (node *Node) eval(M Module) {
 	case "xor":
 		p := M.Nodes[node.Args[0]].Value
 		q := M.Nodes[node.Args[1]].Value
-		if p > .5 && q > .5 ||
-			p < .5 && q < .5 {
+		if p > .5 && q > .5 || p < .5 && q < .5 {
 			node.Value = 1.0
 		} else {
 			node.Value = 0.0
 		}
-	case "not":
+	case "noise":
 		p := M.Nodes[node.Args[0]].Value
-		if p > .5 {
-			node.Value = 0.0
-		} else {
-			node.Value = 1.0
-		}
+		q := M.Nodes[node.Args[1]].Value
+		node.Value = .5 + pnoise.At2d(10*p, 10*q)
+	case "lerp":
+		t := M.Nodes[node.Args[0]].Value
+		A := M.Nodes[node.Args[1]].Value
+		B := M.Nodes[node.Args[2]].Value
+		node.Value = t*A + (1-t)*B
 	case "if":
 		cond := M.Nodes[node.Args[0]].Value
 		_then := M.Nodes[node.Args[1]].Value
@@ -502,7 +547,7 @@ func (C Circuit) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Colo
 		x, y := S[i], S[i+1]
 		_x, _y := x-.5, y-.5
 		r := math.Sqrt(_x*_x + _y*_y)
-		t := math.Atan2(_y, _x)
+		t := math.Atan2(_y, _x)/(2.0*math.Pi) + .5
 		inputs := []float64{x, y, r, t}
 		out := C.Eval(inputs)
 		c.Add(Color{out[0], out[1], out[2]})
@@ -1000,7 +1045,7 @@ func (C Circuit) Graphviz(w io.Writer) {
 		}
 		for i, out := range mod.Outputs {
 			k := len(mod.Nodes) + i
-			fmt.Fprintf(w, "      %d -> %d\n", out.Idx, k)
+			fmt.Fprintf(w, "      %d -> %d;\n", out.Idx, k)
 		}
 		fmt.Fprintf(w, "   }\n")
 	}
