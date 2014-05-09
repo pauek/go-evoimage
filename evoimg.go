@@ -122,209 +122,6 @@ func (N *Node) Clone() (node *Node) {
 	return
 }
 
-// Ordenación topológica: los nodos estan puestos de tal manera
-// que no hay dependencias hacia nodos de menor índice.
-// Esto permite evaluar con un bucle lineal desde los índices mayores
-// a los menores.
-
-type Topological []*_Node
-
-func (t Topological) Len() int           { return len(t) }
-func (t Topological) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
-
-func (M Module) Size() int {
-	return len(M.Nodes)
-}
-
-func (M *Module) Clone() (newM *Module) {
-	newM = &Module{
-		Name:    M.Name,
-		Nodes:   make([]*Node, len(M.Nodes)),
-		Inputs:  make([]Port, len(M.Inputs)),
-		Outputs: make([]Port, len(M.Outputs)),
-	}
-	for i := range M.Nodes {
-		newM.Nodes[i] = M.Nodes[i].Clone()
-	}
-	copy(newM.Inputs, M.Inputs)
-	copy(newM.Outputs, M.Outputs)
-	return
-}
-
-func (M Module) isInput(n int) bool {
-	for i := range M.Inputs {
-		if M.Inputs[i].Idx == n {
-			return true
-		}
-	}
-	return false
-}
-
-func (M Module) OutputNamesAsString() (s string) {
-	for _, outp := range M.Outputs {
-		s += fmt.Sprintf("%c", outp.Name)
-
-	}
-	return s
-}
-
-func (M Module) OutputIndices() (indices []int) {
-	indices = make([]int, len(M.Outputs))
-	for i := range M.Outputs {
-		indices[i] = M.Outputs[i].Idx
-	}
-	return
-}
-
-func (M *Module) reconstructInputs() error {
-	for i, inp := range M.Inputs {
-		M.Inputs[i].Idx = -1
-		name := fmt.Sprintf("%c", inp.Name)
-		for j, node := range M.Nodes {
-			if node.Op == name {
-				if M.Inputs[i].Idx != -1 {
-					return fmt.Errorf("Duplicate input '%s'", name)
-				}
-				M.Inputs[i].Idx = j
-			}
-		}
-	}
-	return nil
-}
-
-func (M *Module) TopologicalSort() {
-	_Nodes := make([]*_Node, len(M.Nodes))
-	for i := range M.Nodes {
-		_Nodes[i] = &_Node{
-			Node:  *M.Nodes[i],
-			Order: -1,
-		}
-	}
-	changes := true
-	for changes {
-		changes = false
-		for _, node := range _Nodes {
-			if node.Order >= 0 {
-				continue
-			}
-			max_child_order := 0 // for no-args nodes
-			for _, arg := range node.Args {
-				ord := _Nodes[arg.Node()].Order
-				if ord == -1 {
-					max_child_order = -1
-					break
-				}
-				if ord > max_child_order {
-					max_child_order = ord
-				}
-			}
-			if max_child_order >= 0 {
-				node.Order = max_child_order + 1
-				changes = true
-			}
-		}
-	}
-	sorted_Nodes := make([]*_Node, len(_Nodes))
-	for i := range _Nodes {
-		sorted_Nodes[i] = _Nodes[i]
-	}
-	sort.Sort(Topological(sorted_Nodes))
-	for i := range sorted_Nodes {
-		sorted_Nodes[i].NewPos = i
-	}
-	for i := range sorted_Nodes {
-		for j := range sorted_Nodes[i].Args {
-			iold := sorted_Nodes[i].Args[j]
-			inew := _Nodes[iold.Node()].NewPos
-			sorted_Nodes[i].Args[j] = argument(inew, iold.Output())
-		}
-		M.Nodes[i] = &sorted_Nodes[i].Node
-	}
-	// Reconstruct Outputs
-	for i := range M.Outputs {
-		M.Outputs[i].Idx = _Nodes[M.Outputs[i].Idx].NewPos
-	}
-	M.reconstructInputs()
-}
-
-func (M *Module) TreeShake() {
-	sz := M.Size()
-	if sz == 0 {
-		return
-	}
-
-	// First determine which nodes will be kept
-	keep := make([]bool, sz)
-	roots := M.OutputIndices()
-
-	// make queue
-	Q := make([]int, sz+1)
-	for i := range Q {
-		Q[i] = -1
-	}
-	top := 0
-
-	qadd := func(i int) { // add to queue
-		if find(i, Q) == -1 {
-			Q[top] = i
-			top++
-		}
-	}
-	for i := range roots {
-		qadd(roots[i])
-	}
-	curr := 0
-	for Q[curr] != -1 {
-		i := Q[curr]
-		keep[i] = true
-		for _, a := range M.Nodes[i].Args {
-			qadd(a.Node())
-		}
-		curr++
-	}
-
-	// Assign new indices
-	newindex := make([]int, sz)
-	for i := range newindex {
-		newindex[i] = -1
-	}
-	newi := 0
-	for i := range M.Nodes {
-		if !keep[i] {
-			continue
-		}
-		newindex[i] = newi
-		newi++
-	}
-
-	// Translate inputs + outputs
-	for i := range M.Inputs {
-		if M.Inputs[i].Idx != -1 {
-			M.Inputs[i].Idx = newindex[M.Inputs[i].Idx]
-		}
-	}
-	for i := range M.Outputs {
-		if M.Outputs[i].Idx != -1 {
-			M.Outputs[i].Idx = newindex[M.Outputs[i].Idx]
-		}
-	}
-
-	// Keep nodes + translate indices
-	keepnodes := []*Node{}
-	for i, node := range M.Nodes {
-		if !keep[i] {
-			continue
-		}
-		for i := range node.Args {
-			node.Args[i] = argument(newindex[node.Args[i].Node()], 0)
-		}
-		keepnodes = append(keepnodes, node)
-	}
-	M.Nodes = keepnodes
-	return
-}
-
 func (node *Node) eval(M Module) {
 	if node.Ready {
 		return
@@ -506,6 +303,249 @@ func (node *Node) eval(M Module) {
 	node.Ready = true
 }
 
+// Module //////////////////////////////////////////////////
+
+func (M Module) Size() int {
+	return len(M.Nodes)
+}
+
+func (M *Module) Clone() (newM *Module) {
+	newM = &Module{
+		Name:    M.Name,
+		Nodes:   make([]*Node, len(M.Nodes)),
+		Inputs:  make([]Port, len(M.Inputs)),
+		Outputs: make([]Port, len(M.Outputs)),
+	}
+	for i := range M.Nodes {
+		newM.Nodes[i] = M.Nodes[i].Clone()
+	}
+	copy(newM.Inputs, M.Inputs)
+	copy(newM.Outputs, M.Outputs)
+	return
+}
+
+func (M Module) String() string {
+	s := "("
+	for _, outp := range M.Outputs {
+		s += fmt.Sprintf("%c", outp.Name)
+	}
+	s += ")"
+	s += M.Name
+	s += "("
+	for _, inp := range M.Inputs {
+		s += fmt.Sprintf("%c", inp.Name)
+	}
+	s += ")"
+	s += "["
+	for i, node := range M.Nodes {
+		if i > 0 {
+			s += "|"
+		}
+		colon := ""
+		for j := range M.Outputs {
+			if i == M.Outputs[j].Idx {
+				s += fmt.Sprintf("%c", M.Outputs[j].Name)
+				colon = ":"
+			}
+		}
+		s += colon
+		s += node.Op
+		if node.Op == "=" {
+			s += fmt.Sprintf(" %g", node.Value[0])
+		} else {
+			for _, arg := range node.Args {
+				s += fmt.Sprintf(" %d", arg)
+			}
+		}
+	}
+	s += "]"
+	return s
+}
+
+func (M Module) isInput(n int) bool {
+	for i := range M.Inputs {
+		if M.Inputs[i].Idx == n {
+			return true
+		}
+	}
+	return false
+}
+
+func (M Module) OutputNamesAsString() (s string) {
+	for _, outp := range M.Outputs {
+		s += fmt.Sprintf("%c", outp.Name)
+
+	}
+	return s
+}
+
+func (M Module) OutputIndices() (indices []int) {
+	indices = make([]int, len(M.Outputs))
+	for i := range M.Outputs {
+		indices[i] = M.Outputs[i].Idx
+	}
+	return
+}
+
+func (M *Module) reconstructInputs() error {
+	for i, inp := range M.Inputs {
+		M.Inputs[i].Idx = -1
+		name := fmt.Sprintf("%c", inp.Name)
+		for j, node := range M.Nodes {
+			if node.Op == name {
+				if M.Inputs[i].Idx != -1 {
+					return fmt.Errorf("Duplicate input '%s'", name)
+				}
+				M.Inputs[i].Idx = j
+			}
+		}
+	}
+	return nil
+}
+
+// Ordenación topológica: los nodos estan puestos de tal manera
+// que no hay dependencias hacia nodos de menor índice.
+// Esto permite evaluar con un bucle lineal desde los índices mayores
+// a los menores.
+
+type Topological []*_Node
+
+func (t Topological) Len() int           { return len(t) }
+func (t Topological) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
+
+func (M *Module) TopologicalSort() {
+	_Nodes := make([]*_Node, len(M.Nodes))
+	for i := range M.Nodes {
+		_Nodes[i] = &_Node{
+			Node:  *M.Nodes[i],
+			Order: -1,
+		}
+	}
+	changes := true
+	for changes {
+		changes = false
+		for _, node := range _Nodes {
+			if node.Order >= 0 {
+				continue
+			}
+			max_child_order := 0 // for no-args nodes
+			for _, arg := range node.Args {
+				ord := _Nodes[arg.Node()].Order
+				if ord == -1 {
+					max_child_order = -1
+					break
+				}
+				if ord > max_child_order {
+					max_child_order = ord
+				}
+			}
+			if max_child_order >= 0 {
+				node.Order = max_child_order + 1
+				changes = true
+			}
+		}
+	}
+	sorted_Nodes := make([]*_Node, len(_Nodes))
+	for i := range _Nodes {
+		sorted_Nodes[i] = _Nodes[i]
+	}
+	sort.Sort(Topological(sorted_Nodes))
+	for i := range sorted_Nodes {
+		sorted_Nodes[i].NewPos = i
+	}
+	for i := range sorted_Nodes {
+		for j := range sorted_Nodes[i].Args {
+			iold := sorted_Nodes[i].Args[j]
+			inew := _Nodes[iold.Node()].NewPos
+			sorted_Nodes[i].Args[j] = argument(inew, iold.Output())
+		}
+		M.Nodes[i] = &sorted_Nodes[i].Node
+	}
+	// Reconstruct Outputs
+	for i := range M.Outputs {
+		M.Outputs[i].Idx = _Nodes[M.Outputs[i].Idx].NewPos
+	}
+	M.reconstructInputs()
+}
+
+func (M *Module) TreeShake() {
+	sz := M.Size()
+	if sz == 0 {
+		return
+	}
+
+	// First determine which nodes will be kept
+	keep := make([]bool, sz)
+	roots := M.OutputIndices()
+
+	// make queue
+	Q := make([]int, sz+1)
+	for i := range Q {
+		Q[i] = -1
+	}
+	top := 0
+
+	qadd := func(i int) { // add to queue
+		if find(i, Q) == -1 {
+			Q[top] = i
+			top++
+		}
+	}
+	for i := range roots {
+		qadd(roots[i])
+	}
+	curr := 0
+	for Q[curr] != -1 {
+		i := Q[curr]
+		keep[i] = true
+		for _, a := range M.Nodes[i].Args {
+			qadd(a.Node())
+		}
+		curr++
+	}
+
+	// Assign new indices
+	newindex := make([]int, sz)
+	for i := range newindex {
+		newindex[i] = -1
+	}
+	newi := 0
+	for i := range M.Nodes {
+		if !keep[i] {
+			continue
+		}
+		newindex[i] = newi
+		newi++
+	}
+
+	// Translate inputs + outputs
+	for i := range M.Inputs {
+		if M.Inputs[i].Idx != -1 {
+			M.Inputs[i].Idx = newindex[M.Inputs[i].Idx]
+		}
+	}
+	for i := range M.Outputs {
+		if M.Outputs[i].Idx != -1 {
+			M.Outputs[i].Idx = newindex[M.Outputs[i].Idx]
+		}
+	}
+
+	// Keep nodes + translate indices
+	keepnodes := []*Node{}
+	for i, node := range M.Nodes {
+		if !keep[i] {
+			continue
+		}
+		for i := range node.Args {
+			node.Args[i] = argument(newindex[node.Args[i].Node()], 0)
+		}
+		keepnodes = append(keepnodes, node)
+	}
+	M.Nodes = keepnodes
+	return
+}
+
 func (M Module) SetInputs(inputs []float64) {
 	for i := range M.Nodes {
 		M.Nodes[i].Ready = false
@@ -583,351 +623,6 @@ func (mod Module) Eval(C *Circuit, inputs []float64) (outputs []float64) {
 	mod.SetInputs(inputs)
 	mod.EvalNodes(C, mod.OutputIndices()...)
 	outputs = mod.GetOutputs()
-	return
-}
-
-func (C Circuit) EvalModule(name string, inputs []float64) (outputs []float64) {
-	mod, ok := C.Modules[name]
-	if !ok {
-		msg := fmt.Sprintf("Module '%s' missing", mod)
-		panic(msg)
-	}
-	mod.SetInputs(inputs)
-	mod.EvalNodes(&C, mod.OutputIndices()...)
-	outputs = mod.GetOutputs()
-	return
-}
-
-func (C Circuit) Eval(inputs []float64) (outputs []float64) {
-	return C.EvalModule("", inputs)
-}
-
-func _map(x float64) (y float64) {
-	y = x
-	if y > 1.0 {
-		y = 1.0
-	}
-	if y < 0.0 {
-		y = 0.0
-	}
-	return
-}
-
-func (C Circuit) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color {
-	xsz := (xhigh - xlow) / float64(samples)
-	ysz := (yhigh - ylow) / float64(samples)
-	S := make([]float64, samples*2)
-	for i := 0; i < samples; i++ {
-		S[i*2] = xlow + float64(i)*xsz + xsz*rand.Float64()
-		S[i*2+1] = ylow + float64(i)*ysz + ysz*rand.Float64()
-	}
-	for dim := 0; dim < 2; dim++ {
-		for i := 0; i < samples; i++ {
-			_i := rand.Intn(samples)
-			S[i*2+dim], S[_i*2+dim] = S[_i*2+dim], S[i*2+dim]
-		}
-	}
-	var c Color
-	for i := 0; i < len(S); i += 2 {
-		x, y := S[i], S[i+1]
-		_x, _y := x-.5, y-.5
-		r := math.Sqrt(_x*_x + _y*_y)
-		t := math.Atan2(_y, _x)/(2.0*math.Pi) + .5
-		inputs := []float64{x, y, r, t}
-		out := C.Eval(inputs)
-		c.Add(Color{out[0], out[1], out[2]})
-	}
-	return c.Divide(float64(samples))
-}
-
-func (C Circuit) Render(size, samples int) image.Image {
-	img := NewImage(size, size)
-	for i := 0; i < size; i++ {
-		for j := 0; j < size; j++ {
-			xlow := float64(i) / float64(size)
-			xhigh := float64(i+1) / float64(size)
-			ylow := float64(j) / float64(size)
-			yhigh := float64(j+1) / float64(size)
-			px := C.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
-			img.px[i][j] = color.RGBA{
-				uint8(_map(px.R) * 255.0),
-				uint8(_map(px.G) * 255.0),
-				uint8(_map(px.B) * 255.0),
-				255,
-			}
-		}
-	}
-	return img
-}
-
-func (M Module) String() string {
-	s := "("
-	for _, outp := range M.Outputs {
-		s += fmt.Sprintf("%c", outp.Name)
-	}
-	s += ")"
-	s += M.Name
-	s += "("
-	for _, inp := range M.Inputs {
-		s += fmt.Sprintf("%c", inp.Name)
-	}
-	s += ")"
-	s += "["
-	for i, node := range M.Nodes {
-		if i > 0 {
-			s += "|"
-		}
-		colon := ""
-		for j := range M.Outputs {
-			if i == M.Outputs[j].Idx {
-				s += fmt.Sprintf("%c", M.Outputs[j].Name)
-				colon = ":"
-			}
-		}
-		s += colon
-		s += node.Op
-		if node.Op == "=" {
-			s += fmt.Sprintf(" %g", node.Value[0])
-		} else {
-			for _, arg := range node.Args {
-				s += fmt.Sprintf(" %d", arg)
-			}
-		}
-	}
-	s += "]"
-	return s
-}
-
-func (C Circuit) Clone() (newC Circuit) {
-	newC.Modules = make(map[string]*Module)
-	for name, mod := range C.Modules {
-		newC.Modules[name] = mod.Clone()
-	}
-	return
-}
-
-var (
-	OperatorChangeProbability = 1.0
-	ReconnectProbability      = 0.5
-)
-
-func (M *Module) Mutate() {
-	r := rand.Float64()
-	r -= OperatorChangeProbability
-	if r < 0 {
-		M.mutOperatorChange()
-	}
-	r -= ReconnectProbability
-	if r < 0 {
-		M.mutReconnect()
-	}
-}
-
-func (M *Module) mutReconnect() {
-	// TODO
-}
-
-func (M *Module) mutOperatorChange() {
-	candidates := []int{}
-	for i := range M.Nodes {
-		op := M.Nodes[i].Op
-		info := OperatorInfo[op]
-		if info.Nargs >= 1 && info.Nargs <= 2 {
-			candidates = append(candidates, i)
-		}
-	}
-	k := candidates[rand.Intn(len(candidates))]
-	chosen := M.Nodes[k].Op
-	info := OperatorInfo[chosen]
-	nargs := info.Nargs
-	alternatives := []string{}
-	same_args := NumArguments[nargs]
-	for i := range same_args {
-		if same_args[i] != chosen {
-			alternatives = append(alternatives, same_args[i])
-		}
-	}
-	M.Nodes[k].Op = alternatives[rand.Intn(len(alternatives))]
-}
-
-func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
-	M = &Module{}
-	for _, c := range inputs {
-		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
-	}
-	for _, c := range outputs {
-		M.Outputs = append(M.Outputs, Port{Name: c, Idx: -1})
-	}
-
-	// 1) Generate nodes without connections
-	for i := 0; i < numnodes; i++ {
-		iop := rand.Intn(len(Operators))
-		op := Operators[iop]
-		info := OperatorInfo[op]
-		args := []Argument{}
-		val := 0.0
-		if op == "=" {
-			val = rand.Float64()
-		} else {
-			for i := 0; i < info.Nargs; i++ {
-				args = append(args, -1)
-			}
-		}
-		M.Nodes = append(M.Nodes, &Node{
-			Op:    op,
-			Args:  args,
-			Value: []float64{val},
-		})
-	}
-	for i := range M.Inputs { // + add Input nodes at the end
-		k := len(M.Nodes)
-		M.Nodes = append(M.Nodes, &Node{
-			Op:    fmt.Sprintf("%c", M.Inputs[i].Name),
-			Value: []float64{0.0},
-		})
-		M.Inputs[i].Idx = k
-	}
-
-	// 2) Set the output of every node to a node below
-	for i := range M.Nodes {
-		// how many inputs below
-		ninputs := 0
-		for j := 0; j < i; j++ {
-			for k := range M.Nodes[j].Args {
-				if M.Nodes[j].Args[k] == -1 {
-					ninputs++
-				}
-			}
-		}
-		noutputs := 0
-		for j := range M.Outputs {
-			if M.Outputs[j].Idx == -1 {
-				noutputs++
-			}
-		}
-
-		if ninputs == 0 && noutputs == 0 {
-			continue
-		}
-
-		r := rand.Intn(ninputs + noutputs)
-
-		if r >= ninputs {
-			// assign to output
-			r -= ninputs
-			for j := range M.Outputs {
-				if M.Outputs[j].Idx == -1 {
-					if r--; r < 0 {
-						M.Outputs[j].Idx = i
-						goto done
-					}
-				}
-			}
-			panic("unreachable1")
-		} else {
-			// assign to input of other node
-			for j := 0; j < i; j++ {
-				for k := range M.Nodes[j].Args {
-					if M.Nodes[j].Args[k] == -1 {
-						if r--; r < 0 {
-							M.Nodes[j].Args[k] = argument(i, 0)
-							goto done
-						}
-					}
-				}
-			}
-			panic("didn't assign output!")
-		}
-	done:
-	}
-
-	// 3) Assign at random the remaining links
-	sz := len(M.Nodes)
-	for i := range M.Nodes {
-		for j, a := range M.Nodes[i].Args {
-			if a == -1 {
-				M.Nodes[i].Args[j] = argument(i+1+rand.Intn(sz-i-1), 0)
-			}
-		}
-	}
-
-	// 4) Assign at random the remaining outputs
-	for i := range M.Outputs {
-		if M.Outputs[i].Idx == -1 {
-			M.Outputs[i].Idx = rand.Intn(sz)
-		}
-	}
-	M.reconstructInputs()
-	M.TopologicalSort()
-	M.TreeShake()
-	return
-}
-
-func RandomModule(inputs, outputs string, numnodes int) (M Module) {
-	for _, c := range inputs {
-		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
-	}
-	for _, c := range outputs {
-		M.Outputs = append(M.Outputs, Port{Name: c, Idx: -1})
-	}
-	// Add Input nodes
-	for i := range M.Inputs {
-		M.Nodes = append(M.Nodes, &Node{
-			Op:    fmt.Sprintf("%c", M.Inputs[i].Name),
-			Value: []float64{0.0},
-		})
-	}
-	// Generate nodes
-	curr := len(M.Inputs)
-	for i := 0; i < numnodes; i++ {
-		iop := rand.Intn(len(Operators))
-		op := Operators[iop]
-		info := OperatorInfo[op]
-		args := []Argument{}
-		val := 0.0
-		if op == "=" {
-			val = rand.Float64()
-		} else {
-			for _, a := range rand.Perm(curr)[:info.Nargs] {
-				args = append(args, argument(a, 0))
-			}
-		}
-		M.Nodes = append(M.Nodes, &Node{
-			Op:    op,
-			Args:  args,
-			Value: []float64{val},
-		})
-		curr++
-	}
-	// Assign outputs
-	for i := range M.Outputs {
-		M.Outputs[i].Idx = rand.Intn(curr)
-	}
-	M.reconstructInputs()
-	M.TopologicalSort()
-	M.TreeShake()
-	return
-}
-
-func RandomCircuit(numnodes int) (C Circuit) {
-	C.Modules = make(map[string]*Module)
-	C.Modules[""] = RandomModule2("xyrt", "rgb", numnodes)
-	return C
-}
-
-func (C Circuit) Mutate() {
-	C.Modules[""].Mutate()
-}
-
-func (C Circuit) String() (s string) {
-	i := 0
-	for _, mod := range C.Modules {
-		if i > 0 {
-			s += ";"
-		}
-		s += mod.String()
-		i++
-	}
 	return
 }
 
@@ -1093,6 +788,315 @@ func readModule(s string) (mod *Module, err error) {
 	return
 }
 
+func RandomModule(inputs, outputs string, numnodes int) (M Module) {
+	for _, c := range inputs {
+		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
+	}
+	for _, c := range outputs {
+		M.Outputs = append(M.Outputs, Port{Name: c, Idx: -1})
+	}
+	// Add Input nodes
+	for i := range M.Inputs {
+		M.Nodes = append(M.Nodes, &Node{
+			Op:    fmt.Sprintf("%c", M.Inputs[i].Name),
+			Value: []float64{0.0},
+		})
+	}
+	// Generate nodes
+	curr := len(M.Inputs)
+	for i := 0; i < numnodes; i++ {
+		iop := rand.Intn(len(Operators))
+		op := Operators[iop]
+		info := OperatorInfo[op]
+		args := []Argument{}
+		val := 0.0
+		if op == "=" {
+			val = rand.Float64()
+		} else {
+			for _, a := range rand.Perm(curr)[:info.Nargs] {
+				args = append(args, argument(a, 0))
+			}
+		}
+		M.Nodes = append(M.Nodes, &Node{
+			Op:    op,
+			Args:  args,
+			Value: []float64{val},
+		})
+		curr++
+	}
+	// Assign outputs
+	for i := range M.Outputs {
+		M.Outputs[i].Idx = rand.Intn(curr)
+	}
+	M.reconstructInputs()
+	M.TopologicalSort()
+	M.TreeShake()
+	return
+}
+
+func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
+	M = &Module{}
+	for _, c := range inputs {
+		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
+	}
+	for _, c := range outputs {
+		M.Outputs = append(M.Outputs, Port{Name: c, Idx: -1})
+	}
+
+	// 1) Generate nodes without connections
+	for i := 0; i < numnodes; i++ {
+		iop := rand.Intn(len(Operators))
+		op := Operators[iop]
+		info := OperatorInfo[op]
+		args := []Argument{}
+		val := 0.0
+		if op == "=" {
+			val = rand.Float64()
+		} else {
+			for i := 0; i < info.Nargs; i++ {
+				args = append(args, -1)
+			}
+		}
+		M.Nodes = append(M.Nodes, &Node{
+			Op:    op,
+			Args:  args,
+			Value: []float64{val},
+		})
+	}
+	for i := range M.Inputs { // + add Input nodes at the end
+		k := len(M.Nodes)
+		M.Nodes = append(M.Nodes, &Node{
+			Op:    fmt.Sprintf("%c", M.Inputs[i].Name),
+			Value: []float64{0.0},
+		})
+		M.Inputs[i].Idx = k
+	}
+
+	// 2) Set the output of every node to a node below
+	for i := range M.Nodes {
+		// how many inputs below
+		ninputs := 0
+		for j := 0; j < i; j++ {
+			for k := range M.Nodes[j].Args {
+				if M.Nodes[j].Args[k] == -1 {
+					ninputs++
+				}
+			}
+		}
+		noutputs := 0
+		for j := range M.Outputs {
+			if M.Outputs[j].Idx == -1 {
+				noutputs++
+			}
+		}
+
+		if ninputs == 0 && noutputs == 0 {
+			continue
+		}
+
+		r := rand.Intn(ninputs + noutputs)
+
+		if r >= ninputs {
+			// assign to output
+			r -= ninputs
+			for j := range M.Outputs {
+				if M.Outputs[j].Idx == -1 {
+					if r--; r < 0 {
+						M.Outputs[j].Idx = i
+						goto done
+					}
+				}
+			}
+			panic("unreachable1")
+		} else {
+			// assign to input of other node
+			for j := 0; j < i; j++ {
+				for k := range M.Nodes[j].Args {
+					if M.Nodes[j].Args[k] == -1 {
+						if r--; r < 0 {
+							M.Nodes[j].Args[k] = argument(i, 0)
+							goto done
+						}
+					}
+				}
+			}
+			panic("didn't assign output!")
+		}
+	done:
+	}
+
+	// 3) Assign at random the remaining links
+	sz := len(M.Nodes)
+	for i := range M.Nodes {
+		for j, a := range M.Nodes[i].Args {
+			if a == -1 {
+				M.Nodes[i].Args[j] = argument(i+1+rand.Intn(sz-i-1), 0)
+			}
+		}
+	}
+
+	// 4) Assign at random the remaining outputs
+	for i := range M.Outputs {
+		if M.Outputs[i].Idx == -1 {
+			M.Outputs[i].Idx = rand.Intn(sz)
+		}
+	}
+	M.reconstructInputs()
+	M.TopologicalSort()
+	M.TreeShake()
+	return
+}
+
+var (
+	OperatorChangeProbability = 1.0
+	ReconnectProbability      = 0.5
+)
+
+func (M *Module) Mutate() {
+	r := rand.Float64()
+	r -= OperatorChangeProbability
+	if r < 0 {
+		M.mutOperatorChange()
+	}
+	r -= ReconnectProbability
+	if r < 0 {
+		M.mutReconnect()
+	}
+}
+
+func (M *Module) mutReconnect() {
+	// TODO
+}
+
+func (M *Module) mutOperatorChange() {
+	candidates := []int{}
+	for i := range M.Nodes {
+		op := M.Nodes[i].Op
+		info := OperatorInfo[op]
+		if info.Nargs >= 1 && info.Nargs <= 2 {
+			candidates = append(candidates, i)
+		}
+	}
+	k := candidates[rand.Intn(len(candidates))]
+	chosen := M.Nodes[k].Op
+	info := OperatorInfo[chosen]
+	nargs := info.Nargs
+	alternatives := []string{}
+	same_args := NumArguments[nargs]
+	for i := range same_args {
+		if same_args[i] != chosen {
+			alternatives = append(alternatives, same_args[i])
+		}
+	}
+	M.Nodes[k].Op = alternatives[rand.Intn(len(alternatives))]
+}
+
+// Circuit /////////////////////////////////////////////////
+
+func (C Circuit) EvalModule(name string, inputs []float64) (outputs []float64) {
+	mod, ok := C.Modules[name]
+	if !ok {
+		msg := fmt.Sprintf("Module '%s' missing", mod)
+		panic(msg)
+	}
+	mod.SetInputs(inputs)
+	mod.EvalNodes(&C, mod.OutputIndices()...)
+	outputs = mod.GetOutputs()
+	return
+}
+
+func (C Circuit) Eval(inputs []float64) (outputs []float64) {
+	return C.EvalModule("", inputs)
+}
+
+func _map(x float64) (y float64) {
+	y = x
+	if y > 1.0 {
+		y = 1.0
+	}
+	if y < 0.0 {
+		y = 0.0
+	}
+	return
+}
+
+func (C Circuit) RenderPixel(xlow, ylow, xhigh, yhigh float64, samples int) Color {
+	xsz := (xhigh - xlow) / float64(samples)
+	ysz := (yhigh - ylow) / float64(samples)
+	S := make([]float64, samples*2)
+	for i := 0; i < samples; i++ {
+		S[i*2] = xlow + float64(i)*xsz + xsz*rand.Float64()
+		S[i*2+1] = ylow + float64(i)*ysz + ysz*rand.Float64()
+	}
+	for dim := 0; dim < 2; dim++ {
+		for i := 0; i < samples; i++ {
+			_i := rand.Intn(samples)
+			S[i*2+dim], S[_i*2+dim] = S[_i*2+dim], S[i*2+dim]
+		}
+	}
+	var c Color
+	for i := 0; i < len(S); i += 2 {
+		x, y := S[i], S[i+1]
+		_x, _y := x-.5, y-.5
+		r := math.Sqrt(_x*_x + _y*_y)
+		t := math.Atan2(_y, _x)/(2.0*math.Pi) + .5
+		inputs := []float64{x, y, r, t}
+		out := C.Eval(inputs)
+		c.Add(Color{out[0], out[1], out[2]})
+	}
+	return c.Divide(float64(samples))
+}
+
+func (C Circuit) Render(size, samples int) image.Image {
+	img := NewImage(size, size)
+	for i := 0; i < size; i++ {
+		for j := 0; j < size; j++ {
+			xlow := float64(i) / float64(size)
+			xhigh := float64(i+1) / float64(size)
+			ylow := float64(j) / float64(size)
+			yhigh := float64(j+1) / float64(size)
+			px := C.RenderPixel(xlow, ylow, xhigh, yhigh, samples)
+			img.px[i][j] = color.RGBA{
+				uint8(_map(px.R) * 255.0),
+				uint8(_map(px.G) * 255.0),
+				uint8(_map(px.B) * 255.0),
+				255,
+			}
+		}
+	}
+	return img
+}
+
+func (C Circuit) Clone() (newC Circuit) {
+	newC.Modules = make(map[string]*Module)
+	for name, mod := range C.Modules {
+		newC.Modules[name] = mod.Clone()
+	}
+	return
+}
+
+func RandomCircuit(numnodes int) (C Circuit) {
+	C.Modules = make(map[string]*Module)
+	C.Modules[""] = RandomModule2("xyrt", "rgb", numnodes)
+	return C
+}
+
+func (C Circuit) Mutate() {
+	C.Modules[""].Mutate()
+}
+
+func (C Circuit) String() (s string) {
+	i := 0
+	for _, mod := range C.Modules {
+		if i > 0 {
+			s += ";"
+		}
+		s += mod.String()
+		i++
+	}
+	return
+}
+
 func Read(s string) (C Circuit, err error) {
 	C.Modules = make(map[string]*Module)
 	smodules := strings.Split(s, ";")
@@ -1212,7 +1216,7 @@ func (C Circuit) Graphviz(w io.Writer) {
 	fmt.Fprintf(w, "}\n")
 }
 
-// Image
+// Image ///////////////////////////////////////////////////
 
 type Image struct {
 	h, w int
