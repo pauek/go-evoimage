@@ -26,7 +26,7 @@ func main() {
 	rand.Seed(Seed)
 
 	e := eimg.RandomCircuit(NumNodes)
-	fmt.Println("Parent:", e)
+	fmt.Println("   ", e)
 	for i := 0; i < NumMutants; i++ {
 		c := e.Clone()
 		c.Mutate()

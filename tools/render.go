@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"runtime"
+	"sync"
 )
 
 var (
@@ -16,7 +17,9 @@ var (
 	Curr    int = 1
 )
 
-func render(expr string) {
+var wg sync.WaitGroup
+
+func render(n int, expr string) {
 	e, err := eimg.Read(expr)
 	if err != nil {
 		fmt.Println("ERROR: ", err)
@@ -24,8 +27,7 @@ func render(expr string) {
 	}
 	fmt.Println(e)
 	img := e.Render(Size, Samples)
-	imgname := fmt.Sprintf("img%04d.png", Curr)
-	Curr++
+	imgname := fmt.Sprintf("img%04d.png", n)
 	f, err := os.Create(imgname)
 	if err != nil {
 		fmt.Printf("Cannot open '%s': %s", imgname, err)
@@ -36,6 +38,7 @@ func render(expr string) {
 		fmt.Printf("Cannot encode '%s': %s", imgname, err)
 		os.Exit(1)
 	}
+	wg.Done()
 }
 
 func main() {
@@ -46,6 +49,9 @@ func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		render(scanner.Text())
+		wg.Add(1)
+		go render(Curr, scanner.Text())
+		Curr++
 	}
+	wg.Wait()
 }
