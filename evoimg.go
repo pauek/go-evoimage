@@ -877,14 +877,15 @@ func parseModule(s string) (mod Module, err error) {
 		} else {
 			if op == "=" {
 				// A constant
-				node = &Node{
-					Op:    "=",
-					Value: []float64{0.0},
-				}
-				n, _ := fmt.Fscanf(rnod, "%f", &node.Value[0])
+				var val float64
+				n, _ := fmt.Fscanf(rnod, "%f", &val)
 				if n != 1 {
 					err = fmt.Errorf("Error in node %d: cannot read constant", i)
 					return
+				}
+				node = &Node{
+					Op:    "=",
+					Value: []float64{val},
 				}
 			} else {
 				// An operator
