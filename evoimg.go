@@ -41,7 +41,8 @@ type OpInfo struct {
 }
 
 var NumArguments = map[int][]string{
-	1: {"=", "x2", "x3", "cos", "sin", "tri", "inv", "band", "bw"},
+	0: {"="},
+	1: {"x2", "x3", "cos", "sin", "tri", "inv", "band", "bw"},
 	2: {"+", "*", "/", "-", "min", "max", "and", "or", "xor", "noise"},
 	3: {"lerp", "if"},
 }
@@ -87,7 +88,7 @@ type Module struct {
 	Outputs []Port
 }
 type Circuit struct {
-	Modules map[string]Module
+	Modules map[string]*Module
 }
 
 func argument(node, output int) Argument {
@@ -110,6 +111,17 @@ func (c *Color) Divide(x float64) Color {
 	return Color{c.R / x, c.G / x, c.B / x}
 }
 
+func (N *Node) Clone() (node *Node) {
+	node = &Node{
+		Op:    N.Op,
+		Value: make([]float64, len(N.Value)),
+		Args:  make([]Argument, len(N.Args)),
+	}
+	copy(node.Value, N.Value)
+	copy(node.Args, N.Args)
+	return
+}
+
 // Ordenación topológica: los nodos estan puestos de tal manera
 // que no hay dependencias hacia nodos de menor índice.
 // Esto permite evaluar con un bucle lineal desde los índices mayores
@@ -123,6 +135,21 @@ func (t Topological) Less(i, j int) bool { return t[i].Order > t[j].Order }
 
 func (M Module) Size() int {
 	return len(M.Nodes)
+}
+
+func (M *Module) Clone() (newM *Module) {
+	newM = &Module{
+		Name:    M.Name,
+		Nodes:   make([]*Node, len(M.Nodes)),
+		Inputs:  make([]Port, len(M.Inputs)),
+		Outputs: make([]Port, len(M.Outputs)),
+	}
+	for i := range M.Nodes {
+		newM.Nodes[i] = M.Nodes[i].Clone()
+	}
+	copy(newM.Inputs, M.Inputs)
+	copy(newM.Outputs, M.Outputs)
+	return
 }
 
 func (M Module) isInput(n int) bool {
@@ -305,6 +332,7 @@ func (node *Node) eval(M Module) {
 	switch node.Op {
 	case "=":
 		// Value is already there
+
 	case "x2":
 		i0 := node.Args[0]
 		f := M.Nodes[i0.Node()].Value[i0.Output()]
@@ -313,6 +341,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 2.0*f - 1
 		}
+
 	case "x3":
 		i0 := node.Args[0]
 		f := M.Nodes[i0.Node()].Value[i0.Output()]
@@ -323,6 +352,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 3.0*f - 2
 		}
+
 	case "band":
 		i0 := node.Args[0]
 		a := M.Nodes[i0.Node()].Value[i0.Output()]
@@ -331,6 +361,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 0.0
 		}
+
 	case "bw":
 		i0 := node.Args[0]
 		a := M.Nodes[i0.Node()].Value[i0.Output()]
@@ -339,18 +370,22 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 0.0
 		}
+
 	case "inv":
 		i0 := node.Args[0]
 		a := M.Nodes[i0.Node()].Value[i0.Output()]
 		node.Value[0] = (1 - a)
+
 	case "cos":
 		i0 := node.Args[0]
 		f := M.Nodes[i0.Node()].Value[i0.Output()]
 		node.Value[0] = (1 + math.Cos(2*math.Pi*f)) / 2
+
 	case "sin":
 		i0 := node.Args[0]
 		f := M.Nodes[i0.Node()].Value[i0.Output()]
 		node.Value[0] = (1 + math.Sin(2*math.Pi*f)) / 2
+
 	case "tri":
 		i0 := node.Args[0]
 		f := M.Nodes[i0.Node()].Value[i0.Output()]
@@ -359,27 +394,32 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 2.0 * (1 - f)
 		}
+
 	case "+":
 		i0 := node.Args[0]
 		i1 := node.Args[1]
 		o0 := M.Nodes[i0.Node()].Value[i0.Output()]
 		o1 := M.Nodes[i1.Node()].Value[i1.Output()]
 		node.Value[0] = (o0 + o1) / 2.0
+
 	case "-":
 		i0, i1 := node.Args[0], node.Args[1]
 		a := M.Nodes[i0.Node()].Value[i0.Output()]
 		b := M.Nodes[i1.Node()].Value[i1.Output()]
 		node.Value[0] = a - b
+
 	case "*":
 		i0, i1 := node.Args[0], node.Args[1]
 		a := M.Nodes[i0.Node()].Value[i0.Output()]
 		b := M.Nodes[i1.Node()].Value[i1.Output()]
 		node.Value[0] = a * b
+
 	case "/":
 		i0, i1 := node.Args[0], node.Args[1]
 		a := M.Nodes[i0.Node()].Value[i0.Output()]
 		b := M.Nodes[i1.Node()].Value[i1.Output()]
 		node.Value[0] = a / b
+
 	case "max":
 		i0 := node.Args[0]
 		i1 := node.Args[1]
@@ -390,6 +430,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = q
 		}
+
 	case "min":
 		i0 := node.Args[0]
 		i1 := node.Args[1]
@@ -400,6 +441,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = q
 		}
+
 	case "and":
 		i0 := node.Args[0]
 		i1 := node.Args[1]
@@ -410,6 +452,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 0.0
 		}
+
 	case "or":
 		i0 := node.Args[0]
 		i1 := node.Args[1]
@@ -420,6 +463,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 0.0
 		}
+
 	case "xor":
 		i0 := node.Args[0]
 		i1 := node.Args[1]
@@ -430,17 +474,20 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = 0.0
 		}
+
 	case "noise":
 		i0, i1 := node.Args[0], node.Args[1]
 		p := M.Nodes[i0.Node()].Value[i0.Output()]
 		q := M.Nodes[i1.Node()].Value[i1.Output()]
 		node.Value[0] = .5 + pnoise.At2d(10*p, 10*q)
+
 	case "lerp":
 		i0, i1, i2 := node.Args[0], node.Args[1], node.Args[2]
 		t := M.Nodes[i0.Node()].Value[i0.Output()]
 		A := M.Nodes[i1.Node()].Value[i1.Output()]
 		B := M.Nodes[i2.Node()].Value[i2.Output()]
 		node.Value[0] = t*A + (1-t)*B
+
 	case "if":
 		i0, i1, i2 := node.Args[0], node.Args[1], node.Args[2]
 		_cond := M.Nodes[i0.Node()].Value[i0.Output()]
@@ -451,6 +498,7 @@ func (node *Node) eval(M Module) {
 		} else {
 			node.Value[0] = _else
 		}
+
 	default:
 		msg := fmt.Sprintf("Op '%s' not implemented!", node.Op)
 		panic(msg)
@@ -650,7 +698,60 @@ func (M Module) String() string {
 	return s
 }
 
-func RandomModule2(inputs, outputs string, numnodes int) (M Module) {
+func (C Circuit) Clone() (newC Circuit) {
+	newC.Modules = make(map[string]*Module)
+	for name, mod := range C.Modules {
+		newC.Modules[name] = mod.Clone()
+	}
+	return
+}
+
+var (
+	OperatorChangeProbability = 1.0
+	ReconnectProbability      = 0.5
+)
+
+func (M *Module) Mutate() {
+	r := rand.Float64()
+	r -= OperatorChangeProbability
+	if r < 0 {
+		M.mutOperatorChange()
+	}
+	r -= ReconnectProbability
+	if r < 0 {
+		M.mutReconnect()
+	}
+}
+
+func (M *Module) mutReconnect() {
+	// TODO
+}
+
+func (M *Module) mutOperatorChange() {
+	candidates := []int{}
+	for i := range M.Nodes {
+		op := M.Nodes[i].Op
+		info := OperatorInfo[op]
+		if info.Nargs >= 1 && info.Nargs <= 2 {
+			candidates = append(candidates, i)
+		}
+	}
+	k := candidates[rand.Intn(len(candidates))]
+	chosen := M.Nodes[k].Op
+	info := OperatorInfo[chosen]
+	nargs := info.Nargs
+	alternatives := []string{}
+	same_args := NumArguments[nargs]
+	for i := range same_args {
+		if same_args[i] != chosen {
+			alternatives = append(alternatives, same_args[i])
+		}
+	}
+	M.Nodes[k].Op = alternatives[rand.Intn(len(alternatives))]
+}
+
+func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
+	M = &Module{}
 	for _, c := range inputs {
 		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
 	}
@@ -809,9 +910,13 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 }
 
 func RandomCircuit(numnodes int) (C Circuit) {
-	C.Modules = make(map[string]Module)
+	C.Modules = make(map[string]*Module)
 	C.Modules[""] = RandomModule2("xyrt", "rgb", numnodes)
 	return C
+}
+
+func (C Circuit) Mutate() {
+	C.Modules[""].Mutate()
 }
 
 func (C Circuit) String() (s string) {
@@ -828,7 +933,7 @@ func (C Circuit) String() (s string) {
 
 var rmodule = regexp.MustCompile(`\((.*)\)(.*)\((.*)\)\[(.*)\]`)
 
-func parseModule(s string) (mod Module, err error) {
+func parseModule(s string) (mod *Module, err error) {
 	if len(s) == 0 {
 		err = fmt.Errorf("Module is empty")
 		return
@@ -846,7 +951,7 @@ func parseModule(s string) (mod Module, err error) {
 	if _, ok := OperatorInfo[name]; ok {
 		return mod, fmt.Errorf("Module name '%s' is reserved", name)
 	}
-	mod.Name = name
+	mod = &Module{Name: name}
 
 	for _, c := range inputs {
 		mod.Inputs = append(mod.Inputs, Port{Name: c, Idx: -1})
@@ -978,7 +1083,7 @@ func parseModule(s string) (mod Module, err error) {
 	return
 }
 
-func readModule(s string) (mod Module, err error) {
+func readModule(s string) (mod *Module, err error) {
 	mod, err = parseModule(s)
 	if err != nil {
 		return
@@ -989,7 +1094,7 @@ func readModule(s string) (mod Module, err error) {
 }
 
 func Read(s string) (C Circuit, err error) {
-	C.Modules = make(map[string]Module)
+	C.Modules = make(map[string]*Module)
 	smodules := strings.Split(s, ";")
 	for _, smod := range smodules {
 		mod, err := parseModule(smod)
