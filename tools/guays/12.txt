@@ -1,0 +1,1 @@
+(rgb)(xyrt)[g:band 2|r:sin 4|cos 3|- 8 6|/ 5 7|x|y|b:r|t]
