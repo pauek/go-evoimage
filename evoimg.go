@@ -63,9 +63,10 @@ func init() {
 type Color struct {
 	R, G, B float64
 }
+type Argument int
 type Node struct {
 	Op    string
-	Args  []int
+	Args  []Argument
 	Value []float64
 	Ready bool
 	Call  bool
@@ -88,6 +89,16 @@ type Module struct {
 type Circuit struct {
 	Modules map[string]Module
 }
+
+func argument(node, output int) Argument {
+	return Argument(node*10 + output%10)
+}
+
+var Unset = Argument(-1)
+
+func (A Argument) IsUnset() bool { return int(A) == -1 }
+func (A Argument) Node() int     { return int(A / 10) }
+func (A Argument) Output() int   { return int(A % 10) }
 
 func (c *Color) Add(other Color) {
 	c.R += other.R
@@ -172,7 +183,7 @@ func (M *Module) TopologicalSort() {
 			}
 			max_child_order := 0 // for no-args nodes
 			for _, arg := range node.Args {
-				ord := _Nodes[arg].Order
+				ord := _Nodes[arg.Node()].Order
 				if ord == -1 {
 					max_child_order = -1
 					break
@@ -198,8 +209,8 @@ func (M *Module) TopologicalSort() {
 	for i := range sorted_Nodes {
 		for j := range sorted_Nodes[i].Args {
 			iold := sorted_Nodes[i].Args[j]
-			inew := _Nodes[iold].NewPos
-			sorted_Nodes[i].Args[j] = inew
+			inew := _Nodes[iold.Node()].NewPos
+			sorted_Nodes[i].Args[j] = argument(inew, iold.Output())
 		}
 		M.Nodes[i] = &sorted_Nodes[i].Node
 	}
@@ -241,7 +252,7 @@ func (M *Module) TreeShake() {
 		i := Q[curr]
 		keep[i] = true
 		for _, a := range M.Nodes[i].Args {
-			qadd(a)
+			qadd(a.Node())
 		}
 		curr++
 	}
@@ -279,7 +290,7 @@ func (M *Module) TreeShake() {
 			continue
 		}
 		for i := range node.Args {
-			node.Args[i] = newindex[node.Args[i]]
+			node.Args[i] = argument(newindex[node.Args[i].Node()], 0)
 		}
 		keepnodes = append(keepnodes, node)
 	}
@@ -294,31 +305,17 @@ func (node *Node) eval(M Module) {
 	switch node.Op {
 	case "=":
 		// Value is already there
-	case "+":
-		a := M.Nodes[node.Args[0]].Value[0]
-		b := M.Nodes[node.Args[1]].Value[0]
-		node.Value[0] = (a + b) / 2.0
-	case "-":
-		a := M.Nodes[node.Args[0]].Value[0]
-		b := M.Nodes[node.Args[1]].Value[0]
-		node.Value[0] = a - b
-	case "*":
-		a := M.Nodes[node.Args[0]].Value[0]
-		b := M.Nodes[node.Args[1]].Value[0]
-		node.Value[0] = a * b
-	case "/":
-		a := M.Nodes[node.Args[0]].Value[0]
-		b := M.Nodes[node.Args[1]].Value[0]
-		node.Value[0] = a / b
 	case "x2":
-		f := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		f := M.Nodes[i0.Node()].Value[i0.Output()]
 		if f < .5 {
 			node.Value[0] = 2.0 * f
 		} else {
 			node.Value[0] = 2.0*f - 1
 		}
 	case "x3":
-		f := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		f := M.Nodes[i0.Node()].Value[i0.Output()]
 		if f < .3333 {
 			node.Value[0] = 3.0 * f
 		} else if f < .6666 {
@@ -327,89 +324,129 @@ func (node *Node) eval(M Module) {
 			node.Value[0] = 3.0*f - 2
 		}
 	case "band":
-		a := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		a := M.Nodes[i0.Node()].Value[i0.Output()]
 		if a > .33 && a < .66 {
 			node.Value[0] = 1.0
 		} else {
 			node.Value[0] = 0.0
 		}
 	case "bw":
-		a := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		a := M.Nodes[i0.Node()].Value[i0.Output()]
 		if a > .5 {
 			node.Value[0] = 1.0
 		} else {
 			node.Value[0] = 0.0
 		}
 	case "inv":
-		a := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		a := M.Nodes[i0.Node()].Value[i0.Output()]
 		node.Value[0] = (1 - a)
 	case "cos":
-		f := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		f := M.Nodes[i0.Node()].Value[i0.Output()]
 		node.Value[0] = (1 + math.Cos(2*math.Pi*f)) / 2
 	case "sin":
-		f := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		f := M.Nodes[i0.Node()].Value[i0.Output()]
 		node.Value[0] = (1 + math.Sin(2*math.Pi*f)) / 2
 	case "tri":
-		f := M.Nodes[node.Args[0]].Value[0]
+		i0 := node.Args[0]
+		f := M.Nodes[i0.Node()].Value[i0.Output()]
 		if f < .5 {
 			node.Value[0] = 2.0 * f
 		} else {
 			node.Value[0] = 2.0 * (1 - f)
 		}
+	case "+":
+		i0 := node.Args[0]
+		i1 := node.Args[1]
+		o0 := M.Nodes[i0.Node()].Value[i0.Output()]
+		o1 := M.Nodes[i1.Node()].Value[i1.Output()]
+		node.Value[0] = (o0 + o1) / 2.0
+	case "-":
+		i0, i1 := node.Args[0], node.Args[1]
+		a := M.Nodes[i0.Node()].Value[i0.Output()]
+		b := M.Nodes[i1.Node()].Value[i1.Output()]
+		node.Value[0] = a - b
+	case "*":
+		i0, i1 := node.Args[0], node.Args[1]
+		a := M.Nodes[i0.Node()].Value[i0.Output()]
+		b := M.Nodes[i1.Node()].Value[i1.Output()]
+		node.Value[0] = a * b
+	case "/":
+		i0, i1 := node.Args[0], node.Args[1]
+		a := M.Nodes[i0.Node()].Value[i0.Output()]
+		b := M.Nodes[i1.Node()].Value[i1.Output()]
+		node.Value[0] = a / b
 	case "max":
-		p := M.Nodes[node.Args[0]].Value[0]
-		q := M.Nodes[node.Args[1]].Value[0]
+		i0 := node.Args[0]
+		i1 := node.Args[1]
+		p := M.Nodes[i0.Node()].Value[i0.Output()]
+		q := M.Nodes[i1.Node()].Value[i1.Output()]
 		if p > q {
 			node.Value[0] = p
 		} else {
 			node.Value[0] = q
 		}
 	case "min":
-		p := M.Nodes[node.Args[0]].Value[0]
-		q := M.Nodes[node.Args[1]].Value[0]
+		i0 := node.Args[0]
+		i1 := node.Args[1]
+		p := M.Nodes[i0.Node()].Value[i0.Output()]
+		q := M.Nodes[i1.Node()].Value[i1.Output()]
 		if p < q {
 			node.Value[0] = p
 		} else {
 			node.Value[0] = q
 		}
 	case "and":
-		p := M.Nodes[node.Args[0]].Value[0]
-		q := M.Nodes[node.Args[1]].Value[0]
+		i0 := node.Args[0]
+		i1 := node.Args[1]
+		p := M.Nodes[i0.Node()].Value[i0.Output()]
+		q := M.Nodes[i1.Node()].Value[i1.Output()]
 		if p > .5 && q > .5 {
 			node.Value[0] = 1.0
 		} else {
 			node.Value[0] = 0.0
 		}
 	case "or":
-		p := M.Nodes[node.Args[0]].Value[0]
-		q := M.Nodes[node.Args[1]].Value[0]
+		i0 := node.Args[0]
+		i1 := node.Args[1]
+		p := M.Nodes[i0.Node()].Value[i0.Output()]
+		q := M.Nodes[i1.Node()].Value[i1.Output()]
 		if p > .5 || q > .5 {
 			node.Value[0] = 1.0
 		} else {
 			node.Value[0] = 0.0
 		}
 	case "xor":
-		p := M.Nodes[node.Args[0]].Value[0]
-		q := M.Nodes[node.Args[1]].Value[0]
+		i0 := node.Args[0]
+		i1 := node.Args[1]
+		p := M.Nodes[i0.Node()].Value[i0.Output()]
+		q := M.Nodes[i1.Node()].Value[i1.Output()]
 		if p > .5 && q > .5 || p < .5 && q < .5 {
 			node.Value[0] = 1.0
 		} else {
 			node.Value[0] = 0.0
 		}
 	case "noise":
-		p := M.Nodes[node.Args[0]].Value[0]
-		q := M.Nodes[node.Args[1]].Value[0]
+		i0, i1 := node.Args[0], node.Args[1]
+		p := M.Nodes[i0.Node()].Value[i0.Output()]
+		q := M.Nodes[i1.Node()].Value[i1.Output()]
 		node.Value[0] = .5 + pnoise.At2d(10*p, 10*q)
 	case "lerp":
-		t := M.Nodes[node.Args[0]].Value[0]
-		A := M.Nodes[node.Args[1]].Value[0]
-		B := M.Nodes[node.Args[2]].Value[0]
+		i0, i1, i2 := node.Args[0], node.Args[1], node.Args[2]
+		t := M.Nodes[i0.Node()].Value[i0.Output()]
+		A := M.Nodes[i1.Node()].Value[i1.Output()]
+		B := M.Nodes[i2.Node()].Value[i2.Output()]
 		node.Value[0] = t*A + (1-t)*B
 	case "if":
-		cond := M.Nodes[node.Args[0]].Value[0]
-		_then := M.Nodes[node.Args[1]].Value[0]
-		_else := M.Nodes[node.Args[2]].Value[0]
-		if cond > .5 {
+		i0, i1, i2 := node.Args[0], node.Args[1], node.Args[2]
+		_cond := M.Nodes[i0.Node()].Value[i0.Output()]
+		_then := M.Nodes[i1.Node()].Value[i1.Output()]
+		_else := M.Nodes[i2.Node()].Value[i2.Output()]
+		if _cond > .5 {
 			node.Value[0] = _then
 		} else {
 			node.Value[0] = _else
@@ -476,7 +513,7 @@ func (M Module) EvalNodes(C *Circuit, roots ...int) {
 	}
 	for i := 0; i < top; i++ {
 		for _, arg := range M.Nodes[selected[i]].Args {
-			_add(arg)
+			_add(arg.Node())
 		}
 	}
 	for i := top - 1; i >= 0; i-- {
@@ -484,7 +521,7 @@ func (M Module) EvalNodes(C *Circuit, roots ...int) {
 			node := &M.Nodes[selected[i]]
 			inputs := []float64{}
 			for _, arg := range (*node).Args {
-				inputs = append(inputs, M.Nodes[arg].Value[0])
+				inputs = append(inputs, M.Nodes[arg.Node()].Value[arg.Output()])
 			}
 			outputs := C.EvalModule((*node).Op, inputs)
 			(*node).Value[0] = outputs[0]
@@ -626,7 +663,7 @@ func RandomModule2(inputs, outputs string, numnodes int) (M Module) {
 		iop := rand.Intn(len(Operators))
 		op := Operators[iop]
 		info := OperatorInfo[op]
-		args := []int{}
+		args := []Argument{}
 		val := 0.0
 		if op == "=" {
 			val = rand.Float64()
@@ -692,7 +729,7 @@ func RandomModule2(inputs, outputs string, numnodes int) (M Module) {
 				for k := range M.Nodes[j].Args {
 					if M.Nodes[j].Args[k] == -1 {
 						if r--; r < 0 {
-							M.Nodes[j].Args[k] = i
+							M.Nodes[j].Args[k] = argument(i, 0)
 							goto done
 						}
 					}
@@ -708,7 +745,7 @@ func RandomModule2(inputs, outputs string, numnodes int) (M Module) {
 	for i := range M.Nodes {
 		for j, a := range M.Nodes[i].Args {
 			if a == -1 {
-				M.Nodes[i].Args[j] = i + 1 + rand.Intn(sz-i-1)
+				M.Nodes[i].Args[j] = argument(i+1+rand.Intn(sz-i-1), 0)
 			}
 		}
 	}
@@ -745,12 +782,14 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 		iop := rand.Intn(len(Operators))
 		op := Operators[iop]
 		info := OperatorInfo[op]
-		args := []int{}
+		args := []Argument{}
 		val := 0.0
 		if op == "=" {
 			val = rand.Float64()
 		} else {
-			args = rand.Perm(curr)[:info.Nargs]
+			for _, a := range rand.Perm(curr)[:info.Nargs] {
+				args = append(args, argument(a, 0))
+			}
 		}
 		M.Nodes = append(M.Nodes, &Node{
 			Op:    op,
@@ -871,7 +910,7 @@ func parseModule(s string) (mod Module, err error) {
 					if n != 1 || err != nil {
 						break
 					}
-					node.Args = append(node.Args, arg)
+					node.Args = append(node.Args, argument(arg/10, arg%10))
 				}
 			}
 		} else {
@@ -899,7 +938,7 @@ func parseModule(s string) (mod Module, err error) {
 					if n != 1 || err != nil {
 						break
 					}
-					node.Args = append(node.Args, arg)
+					node.Args = append(node.Args, argument(arg/10, arg%10))
 				}
 				if info.Nargs != len(node.Args) {
 					err = fmt.Errorf("Error in node %d: `%s` has %d args, not %d.",
@@ -924,10 +963,14 @@ func parseModule(s string) (mod Module, err error) {
 	}
 
 	// check missing nodes
-	for _, node := range mod.Nodes {
-		for _, arg := range node.Args {
-			if arg < 0 || arg >= len(mod.Nodes) {
-				err = fmt.Errorf("Nonexistent node %d", arg)
+	for i, node := range mod.Nodes {
+		for j, arg := range node.Args {
+			if arg.IsUnset() {
+				err = fmt.Errorf("Argument %d missing in node '%d'", j, i)
+				return
+			}
+			if arg.Node() >= len(mod.Nodes) {
+				err = fmt.Errorf("Nonexistent node %d", arg.Node())
 				return
 			}
 		}
@@ -1051,7 +1094,7 @@ func (C Circuit) Graphviz(w io.Writer) {
 		// Links
 		for i, node := range mod.Nodes {
 			for _, arg := range node.Args {
-				fmt.Fprintf(w, `      %d -> %d;`, arg, i)
+				fmt.Fprintf(w, `      %d -> %d;`, arg.Node(), i)
 				fmt.Fprintln(w)
 			}
 		}

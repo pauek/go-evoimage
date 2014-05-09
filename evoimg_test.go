@@ -11,7 +11,7 @@ func TestReadErrorsModule(t *testing.T) {
 			"[x|y|y]",
 			"Modules must have format `(abc)name(xyz)[...]`",
 		}, {
-			"(y)f(ab)[+ 1 2|a|b]",
+			"(y)f(ab)[+ 10 20|a|b]",
 			"Missing output `y`",
 		}, {
 			"", // empty string
@@ -20,13 +20,13 @@ func TestReadErrorsModule(t *testing.T) {
 			"()()[]", // empty expression
 			"Empty node",
 		}, {
-			"(x)()[x:+ 1 2]", // missing nodes
+			"(x)()[x:+ 10 20]", // missing nodes
 			"Nonexistent node 1",
 		}, {
-			"(y)(x)[y:+ 1|x]", // wrong number of args
+			"(y)(x)[y:+ 10|x]", // wrong number of args
 			"Error in node 0: `+` has 2 args, not 1.",
 		}, {
-			"(y)(x)[y:+ 1|x]", // wrong number of args
+			"(y)(x)[y:+ 10|x]", // wrong number of args
 			"Error in node 0: `+` has 2 args, not 1.",
 		},
 	}
@@ -51,17 +51,17 @@ func TestParseModule(t *testing.T) {
 			"(rgb)main(xy)[rgb:  x|y ]",
 			"(rgb)main(xy)[rgb:x|y]",
 		}, {
-			"(xyz)main(xyr)[xyz:  + 1  2 | x| y | r]",
-			"(xyz)main(xyr)[xyz:+ 1 2|x|y|r]",
+			"(xyz)main(xyr)[xyz:  + 10  20 | x| y | r]",
+			"(xyz)main(xyr)[xyz:+ 10 20|x|y|r]",
 		}, {
-			"(pqr)BLA(abc)[p:+ 1 3 | q:a|  r: b| c]",
-			"(pqr)BLA(abc)[p:+ 1 3|q:a|r:b|c]",
+			"(pqr)BLA(abc)[p:+ 10 30 | q:a|  r: b| c]",
+			"(pqr)BLA(abc)[p:+ 10 30|q:a|r:b|c]",
 		}, {
-			"(mno)ASDF(pqr)[m:+ 2 3|no:p|q|r]",
-			"(mno)ASDF(pqr)[m:+ 2 3|no:p|q|r]",
+			"(mno)ASDF(pqr)[m:+ 20 30|no:p|q|r]",
+			"(mno)ASDF(pqr)[m:+ 20 30|no:p|q|r]",
 		}, {
-			"(rgb)jarl(xryt)[  + 2 4  | r:  r|  x| g:t|b:y]",
-			"(rgb)jarl(xryt)[+ 2 4|r:r|x|g:t|b:y]",
+			"(rgb)jarl(xryt)[  + 20 40  | r:  r|  x| g:t|b:y]",
+			"(rgb)jarl(xryt)[+ 20 40|r:r|x|g:t|b:y]",
 		}, {
 			"(rgb)(xy)[r:x|g:y|b:= 1]",
 			"(rgb)(xy)[r:x|g:y|b:= 1]",
@@ -75,14 +75,14 @@ func TestParseModule(t *testing.T) {
 			"(rgb)()[r:= 1|g:= 2|b:= 3]",
 			"(rgb)()[r:= 1|g:= 2|b:= 3]",
 		}, {
-			"(rgb)___(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
-			"(rgb)___(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
+			"(rgb)___(xy)[rgb:lerp 10 20 30|inv 20|x|band 40|y]",
+			"(rgb)___(xy)[rgb:lerp 10 20 30|inv 20|x|band 40|y]",
 		}, {
 			"(uvw)(xy)[uv:x|= 0|w:y]",
 			"(uvw)(xy)[uv:x|= 0|w:y]",
 		}, {
-			"(rgb)(x)[rgb:* 1 2|x|inv 1]",
-			"(rgb)(x)[rgb:* 1 2|x|inv 1]",
+			"(rgb)(x)[rgb:* 10 20|x|inv 10]",
+			"(rgb)(x)[rgb:* 10 20|x|inv 10]",
 		},
 	}
 
@@ -104,23 +104,23 @@ func TestTopologicalSort(t *testing.T) {
 			"(rgb)(xy)[rgb:  x|y ]",
 			"(rgb)(xy)[rgb:x|y]",
 		}, {
-			"(rbg)(xyr)[rgb:  + 1  2 | x| y | r]",
-			"(rbg)(xyr)[rbg:+ 1 2|x|y|r]",
+			"(rbg)(xyr)[rgb:  + 10  20 | x| y | r]",
+			"(rbg)(xyr)[rbg:+ 10 20|x|y|r]",
 		}, {
-			"(rgb)(xy)[r:x|g:y|b:+ 0 1]",
-			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
+			"(rgb)(xy)[r:x|g:y|b:+ 00 10]",
+			"(rgb)(xy)[b:+ 10 20|r:x|g:y]",
 		}, {
-			"(bgr)(xyr)[r:+ 1 3 | g:x|  b: r| y]",
-			"(bgr)(xyr)[r:+ 1 3|g:x|b:r|y]",
+			"(bgr)(xyr)[r:+ 10 30 | g:x|  b: r| y]",
+			"(bgr)(xyr)[r:+ 10 30|g:x|b:r|y]",
 		}, {
-			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
-			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
+			"(bgr)(xyr)[r:+ 10 30|b:r|g:x|y]",
+			"(bgr)(xyr)[r:+ 10 30|b:r|g:x|y]",
 		}, {
-			"(ijk)(xy)[= 1|i:+ 2 3|jk:x|y]",
-			"(ijk)(xy)[i:+ 2 3|= 1|jk:x|y]",
+			"(ijk)(xy)[= 1|i:+ 20 30|jk:x|y]",
+			"(ijk)(xy)[i:+ 20 30|= 1|jk:x|y]",
 		}, {
-			"(abc)(xy)[= 0.2|+ 2 4|ab:x|= 0.3|c:y]",
-			"(abc)(xy)[+ 2 4|= 0.2|ab:x|= 0.3|c:y]",
+			"(abc)(xy)[= 0.2|+ 20 40|ab:x|= 0.3|c:y]",
+			"(abc)(xy)[+ 20 40|= 0.2|ab:x|= 0.3|c:y]",
 		}, {
 			"(rgb)(xy)[r:x|g:y|b:= 2]",
 			"(rgb)(xy)[r:x|g:y|b:= 2]",
@@ -131,11 +131,11 @@ func TestTopologicalSort(t *testing.T) {
 			"(rgb)()[rgb:= 1|= 2|= 3]",
 			"(rgb)()[rgb:= 1|= 2|= 3]",
 		}, {
-			"(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
-			"(rgb)(xy)[rgb:lerp 1 3 2|inv 3|band 4|x|y]",
+			"(rgb)(xy)[rgb:lerp 10 20 30|inv 20|x|band 40|y]",
+			"(rgb)(xy)[rgb:lerp 10 30 20|inv 30|band 40|x|y]",
 		}, {
-			"(rgb)(x)[rgb:* 1 2|x|inv 1]",
-			"(rgb)(x)[rgb:* 2 1|inv 2|x]",
+			"(rgb)(x)[rgb:* 10 20|x|inv 10]",
+			"(rgb)(x)[rgb:* 20 10|inv 20|x]",
 		},
 	}
 	// test topological sort only
@@ -157,29 +157,29 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(rgb)A1(xy)[rgb:  x|y ]",
 			"(rgb)A1(xy)[rgb:x]",
 		}, {
-			"(rbg)A2(xyr)[rgb:  + 1  2 | x| y | r]",
-			"(rbg)A2(xyr)[rbg:+ 1 2|x|y]",
+			"(rbg)A2(xyr)[rgb:  + 10  20 | x| y | r]",
+			"(rbg)A2(xyr)[rbg:+ 10 20|x|y]",
 		}, {
-			"(bgr)pauek(xyr)[r:+ 1 3 | g:x|  b: r| y |bla]",
-			"(bgr)pauek(xyr)[r:+ 1 3|g:x|b:r|y]",
+			"(bgr)pauek(xyr)[r:+ 10 30 | g:x|  b: r| y |bla]",
+			"(bgr)pauek(xyr)[r:+ 10 30|g:x|b:r|y]",
 		}, {
-			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
-			"(bgr)(xyr)[r:+ 1 3|b:r|g:x|y]",
+			"(bgr)(xyr)[r:+ 10 30|b:r|g:x|y]",
+			"(bgr)(xyr)[r:+ 10 30|b:r|g:x|y]",
 		}, {
-			"(ijk)(xy)[i:+ 2 3|= 1|jk:x|y]",
-			"(ijk)(xy)[i:+ 1 2|jk:x|y]",
+			"(ijk)(xy)[i:+ 20 30|= 1|jk:x|y]",
+			"(ijk)(xy)[i:+ 10 20|jk:x|y]",
 		}, {
-			"(abc)(xy)[+ 2 4|= 0|ab:x|= 1|c:y]",
+			"(abc)(xy)[+ 20 40|= 0|ab:x|= 1|c:y]",
 			"(abc)(xy)[ab:x|c:y]",
 		}, {
-			"(abc)(xy)[a:+ 2 4|= 0.5|b:x|= 0.2|c:y]",
-			"(abc)(xy)[a:+ 1 2|b:x|c:y]",
+			"(abc)(xy)[a:+ 20 40|= 0.5|b:x|= 0.2|c:y]",
+			"(abc)(xy)[a:+ 10 20|b:x|c:y]",
 		}, {
 			"(rgb)(xy)[r:x|g:y|b:= 1]",
 			"(rgb)(xy)[r:x|g:y|b:= 1]",
 		}, {
-			"(rgb)(xy)[r:x|g:y|b:+ 0 1]",
-			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
+			"(rgb)(xy)[r:x|g:y|b:+ 00 10]",
+			"(rgb)(xy)[b:+ 10 20|r:x|g:y]",
 		}, {
 			"(uvw)(xyr)[uv:x|= 1|w:y]",
 			"(uvw)(xyr)[uv:x|w:y]",
@@ -187,17 +187,17 @@ func TestSortAndTreeShake(t *testing.T) {
 			"(rgb)(x)[rgb:= 1|= 2|= 3]",
 			"(rgb)(x)[rgb:= 1]",
 		}, {
-			"(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]",
-			"(rgb)(xy)[rgb:lerp 1 3 2|inv 3|band 4|x|y]",
+			"(rgb)(xy)[rgb:lerp 10 20 30|inv 20|x|band 40|y]",
+			"(rgb)(xy)[rgb:lerp 10 30 20|inv 30|band 40|x|y]",
 		}, {
-			"(rgb)(x)[rgb:* 1 2|x|inv 1]",
-			"(rgb)(x)[rgb:* 2 1|inv 2|x]",
+			"(rgb)(x)[rgb:* 10 20|x|inv 10]",
+			"(rgb)(x)[rgb:* 20 10|inv 20|x]",
 		}, {
 			"(p)(abc)[p:a|b|c]",
 			"(p)(abc)[p:a]",
 		}, {
-			"(p)(abc)[p:+ 2 1|b|c]",
-			"(p)(abc)[p:+ 2 1|b|c]",
+			"(p)(abc)[p:+ 20 10|b|c]",
+			"(p)(abc)[p:+ 20 10|b|c]",
 		},
 	}
 
@@ -229,7 +229,7 @@ func TestReadModuleName(t *testing.T) {
 }
 
 func TestEvalNodes(t *testing.T) {
-	e, err := readModule("(a)(xy)[a:+ 1 2|x|y]")
+	e, err := readModule("(a)(xy)[a:+ 10 20|x|y]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
@@ -243,7 +243,7 @@ func TestEvalNodes(t *testing.T) {
 			t.Errorf("Node 2 in '%s' should eval to %g", e.String(), x)
 		}
 	}
-	e, err = readModule("(y)(x)[y:+ 1 2|x|= 0.5]")
+	e, err = readModule("(y)(x)[y:+ 10 20|x|= 0.5]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
@@ -253,7 +253,7 @@ func TestEvalNodes(t *testing.T) {
 				e.String(), ((x + 0.5) / 2.0), out[0])
 		}
 	}
-	e, err = readModule("(rgb)(xy)[rgb:lerp 1 2 3|inv 2|x|band 4|y]")
+	e, err = readModule("(rgb)(xy)[rgb:lerp 10 20 30|inv 20|x|band 40|y]")
 	if err != nil {
 		t.Errorf("Error reading expression: %s", err)
 	}
@@ -314,15 +314,15 @@ func TestCircuitEval(t *testing.T) {
 			[]float64{0.1, 0.9 /* two extra inputs */, 0.0, 0.0},
 			[]float64{0.1, 0.9, 0.9},
 		}, {
-			"(rgb)(xy)[b:+ 1 2|r:x|g:y]",
+			"(rgb)(xy)[b:+ 10 20|r:x|g:y]",
 			[]float64{0.2, 0.4},
 			[]float64{0.2, 0.4, 0.3},
 		}, {
-			"(rgb)(x)[rgb:mod1 1|x];(x)mod1(y)[x:y]",
+			"(rgb)(x)[rgb:mod1 10|x];(x)mod1(y)[x:y]",
 			[]float64{0.5},
 			[]float64{0.5, 0.5, 0.5},
 		}, {
-			"(rgb)(xy)[r:mult 1 2|g:x|b:y];(f)mult(xy)[f:* 1 2|x|y]",
+			"(rgb)(xy)[r:mult 10 20|g:x|b:y];(f)mult(xy)[f:* 10 20|x|y]",
 			[]float64{0.5, 0.3},
 			[]float64{0.15, 0.5, 0.3},
 		},
@@ -339,7 +339,8 @@ func TestCircuitEval(t *testing.T) {
 		} else {
 			for i := range outputs {
 				if math.Abs(outputs[i]-cas.outputs[i]) > 1e-9 {
-					t.Errorf("Different value for output %d: %f vs. %f", i, outputs[i], cas.outputs[i])
+					t.Errorf("Different value for output %d: %f vs. %f (in '%s')",
+						i, outputs[i], cas.outputs[i], cas.circuit)
 					t.Logf("Difference = %f", outputs[i]-cas.outputs[i])
 				}
 			}
