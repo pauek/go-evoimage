@@ -10,11 +10,11 @@ import (
 )
 
 var (
-	NumNodes int
+	Print bool
 )
 
 func main() {
-	flag.IntVar(&NumNodes, "n", 5, "Number of nodes in random module")
+	flag.BoolVar(&Print, "p", false, "Show the file on stdout")
 	flag.Parse()
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -24,6 +24,11 @@ func main() {
 		e, err := eimg.Read(scanner.Text())
 		if err != nil {
 			fmt.Printf("ERROR: %s\n", err)
+			continue
+		}
+
+		if Print {
+			e.Graphviz(os.Stdout)
 			continue
 		}
 
