@@ -137,6 +137,7 @@ func TestTopologicalSort(t *testing.T) {
 			"(rgb)(x)[rgb:* 10 20|x|inv 10]",
 			"(rgb)(x)[rgb:* 20 10|inv 20|x]",
 		},
+		/* TODO: Add checks for loops!! */
 	}
 	// test topological sort only
 	for _, c := range cases {

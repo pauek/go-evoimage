@@ -949,26 +949,124 @@ func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
 
 var (
 	OperatorChangeProbability = 1.0
-	ReconnectProbability      = 0.5
+	ConnectionSwapProbability = 0.5
 )
 
 func (M *Module) Mutate() {
 	r := rand.Float64()
 	r -= OperatorChangeProbability
 	if r < 0 {
-		M.mutOperatorChange()
+		M.MutOperatorChange()
 	}
-	r -= ReconnectProbability
+	r -= ConnectionSwapProbability
 	if r < 0 {
-		M.mutReconnect()
+		M.MutConnectionSwap()
 	}
 }
 
-func (M *Module) mutReconnect() {
-	// TODO
+type Queue struct {
+	elems     []int
+	curr, top int
 }
 
-func (M *Module) mutOperatorChange() {
+func NewQueue(maxsize int) (Q Queue) {
+	Q.elems = make([]int, maxsize+1)
+	for i := range Q.elems {
+		Q.elems[i] = -1
+	}
+	Q.top = 0
+	Q.curr = 0
+	return
+}
+
+func (Q *Queue) Empty() bool { return Q.curr == Q.top }
+func (Q *Queue) Next()       { Q.curr++ }
+func (Q *Queue) Curr() int   { return Q.elems[Q.curr] }
+
+func (Q *Queue) Find(x int) int {
+	for i := range Q.elems {
+		if Q.elems[i] == x {
+			return i
+		}
+	}
+	return -1
+}
+
+func (Q *Queue) Add(x int) {
+	if Q.Find(x) == -1 {
+		Q.elems[Q.top] = x
+		Q.top++
+	}
+}
+
+func (M Module) MarkInputsOf(n int) (marks []bool) {
+	marks = make([]bool, len(M.Nodes))
+	Q := NewQueue(len(M.Nodes))
+	Q.Add(n)
+	for !Q.Empty() {
+		i := Q.Curr()
+		marks[i] = true
+		for _, a := range M.Nodes[i].Args {
+			Q.Add(a.Node())
+		}
+		Q.Next()
+	}
+	return
+}
+
+type Link struct {
+	Node, Input int
+}
+
+func swap(a, b *Argument) {
+	*a, *b = *b, *a
+}
+
+func (M *Module) MutConnectionSwap() {
+
+	for tries := 3; tries > 0; tries-- {
+		// escoger al azar 2 links
+		links1 := []Link{}
+		for i := range M.Nodes {
+			for j := range M.Nodes[i].Args {
+				links1 = append(links1, Link{Node: i, Input: j})
+			}
+		}
+		sz1 := len(links1)
+		if sz1 == 0 {
+			continue
+		}
+		L1 := links1[rand.Intn(sz1)]
+
+		marks := M.MarkInputsOf(L1.Node)
+
+		links2 := []Link{}
+		for i := range M.Nodes {
+			if marks[i] { // avoid predecessors of L1.Node to avoid creating loops
+				continue
+			}
+			for j := range M.Nodes[i].Args {
+				links2 = append(links2, Link{Node: i, Input: j})
+			}
+		}
+
+		sz2 := len(links2)
+		if sz2 == 0 {
+			continue
+		}
+		L2 := links2[rand.Intn(sz2)]
+
+		// swap
+		swap(
+			&M.Nodes[L1.Node].Args[L1.Input],
+			&M.Nodes[L2.Node].Args[L2.Input],
+		)
+		M.TopologicalSort()
+		return
+	}
+}
+
+func (M *Module) MutOperatorChange() {
 	candidates := []int{}
 	for i := range M.Nodes {
 		op := M.Nodes[i].Op
@@ -1082,7 +1180,7 @@ func RandomCircuit(numnodes int) (C Circuit) {
 }
 
 func (C Circuit) Mutate() {
-	C.Modules[""].Mutate()
+	C.Modules[""].MutConnectionSwap()
 }
 
 func (C Circuit) String() (s string) {
