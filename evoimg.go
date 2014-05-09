@@ -66,7 +66,7 @@ type Color struct {
 type Node struct {
 	Op    string
 	Args  []int
-	Value float64
+	Value []float64
 	Ready bool
 	Call  bool
 }
@@ -295,124 +295,124 @@ func (node *Node) eval(M Module) {
 	case "=":
 		// Value is already there
 	case "+":
-		a := M.Nodes[node.Args[0]].Value
-		b := M.Nodes[node.Args[1]].Value
-		node.Value = (a + b) / 2.0
+		a := M.Nodes[node.Args[0]].Value[0]
+		b := M.Nodes[node.Args[1]].Value[0]
+		node.Value[0] = (a + b) / 2.0
 	case "-":
-		a := M.Nodes[node.Args[0]].Value
-		b := M.Nodes[node.Args[1]].Value
-		node.Value = a - b
+		a := M.Nodes[node.Args[0]].Value[0]
+		b := M.Nodes[node.Args[1]].Value[0]
+		node.Value[0] = a - b
 	case "*":
-		a := M.Nodes[node.Args[0]].Value
-		b := M.Nodes[node.Args[1]].Value
-		node.Value = a * b
+		a := M.Nodes[node.Args[0]].Value[0]
+		b := M.Nodes[node.Args[1]].Value[0]
+		node.Value[0] = a * b
 	case "/":
-		a := M.Nodes[node.Args[0]].Value
-		b := M.Nodes[node.Args[1]].Value
-		node.Value = a / b
+		a := M.Nodes[node.Args[0]].Value[0]
+		b := M.Nodes[node.Args[1]].Value[0]
+		node.Value[0] = a / b
 	case "x2":
-		f := M.Nodes[node.Args[0]].Value
+		f := M.Nodes[node.Args[0]].Value[0]
 		if f < .5 {
-			node.Value = 2.0 * f
+			node.Value[0] = 2.0 * f
 		} else {
-			node.Value = 2.0*f - 1
+			node.Value[0] = 2.0*f - 1
 		}
 	case "x3":
-		f := M.Nodes[node.Args[0]].Value
+		f := M.Nodes[node.Args[0]].Value[0]
 		if f < .3333 {
-			node.Value = 3.0 * f
+			node.Value[0] = 3.0 * f
 		} else if f < .6666 {
-			node.Value = 3.0*f - 1
+			node.Value[0] = 3.0*f - 1
 		} else {
-			node.Value = 3.0*f - 2
+			node.Value[0] = 3.0*f - 2
 		}
 	case "band":
-		a := M.Nodes[node.Args[0]].Value
+		a := M.Nodes[node.Args[0]].Value[0]
 		if a > .33 && a < .66 {
-			node.Value = 1.0
+			node.Value[0] = 1.0
 		} else {
-			node.Value = 0.0
+			node.Value[0] = 0.0
 		}
 	case "bw":
-		a := M.Nodes[node.Args[0]].Value
+		a := M.Nodes[node.Args[0]].Value[0]
 		if a > .5 {
-			node.Value = 1.0
+			node.Value[0] = 1.0
 		} else {
-			node.Value = 0.0
+			node.Value[0] = 0.0
 		}
 	case "inv":
-		a := M.Nodes[node.Args[0]].Value
-		node.Value = (1 - a)
+		a := M.Nodes[node.Args[0]].Value[0]
+		node.Value[0] = (1 - a)
 	case "cos":
-		f := M.Nodes[node.Args[0]].Value
-		node.Value = (1 + math.Cos(2*math.Pi*f)) / 2
+		f := M.Nodes[node.Args[0]].Value[0]
+		node.Value[0] = (1 + math.Cos(2*math.Pi*f)) / 2
 	case "sin":
-		f := M.Nodes[node.Args[0]].Value
-		node.Value = (1 + math.Sin(2*math.Pi*f)) / 2
+		f := M.Nodes[node.Args[0]].Value[0]
+		node.Value[0] = (1 + math.Sin(2*math.Pi*f)) / 2
 	case "tri":
-		f := M.Nodes[node.Args[0]].Value
+		f := M.Nodes[node.Args[0]].Value[0]
 		if f < .5 {
-			node.Value = 2.0 * f
+			node.Value[0] = 2.0 * f
 		} else {
-			node.Value = 2.0 * (1 - f)
+			node.Value[0] = 2.0 * (1 - f)
 		}
 	case "max":
-		p := M.Nodes[node.Args[0]].Value
-		q := M.Nodes[node.Args[1]].Value
+		p := M.Nodes[node.Args[0]].Value[0]
+		q := M.Nodes[node.Args[1]].Value[0]
 		if p > q {
-			node.Value = p
+			node.Value[0] = p
 		} else {
-			node.Value = q
+			node.Value[0] = q
 		}
 	case "min":
-		p := M.Nodes[node.Args[0]].Value
-		q := M.Nodes[node.Args[1]].Value
+		p := M.Nodes[node.Args[0]].Value[0]
+		q := M.Nodes[node.Args[1]].Value[0]
 		if p < q {
-			node.Value = p
+			node.Value[0] = p
 		} else {
-			node.Value = q
+			node.Value[0] = q
 		}
 	case "and":
-		p := M.Nodes[node.Args[0]].Value
-		q := M.Nodes[node.Args[1]].Value
+		p := M.Nodes[node.Args[0]].Value[0]
+		q := M.Nodes[node.Args[1]].Value[0]
 		if p > .5 && q > .5 {
-			node.Value = 1.0
+			node.Value[0] = 1.0
 		} else {
-			node.Value = 0.0
+			node.Value[0] = 0.0
 		}
 	case "or":
-		p := M.Nodes[node.Args[0]].Value
-		q := M.Nodes[node.Args[1]].Value
+		p := M.Nodes[node.Args[0]].Value[0]
+		q := M.Nodes[node.Args[1]].Value[0]
 		if p > .5 || q > .5 {
-			node.Value = 1.0
+			node.Value[0] = 1.0
 		} else {
-			node.Value = 0.0
+			node.Value[0] = 0.0
 		}
 	case "xor":
-		p := M.Nodes[node.Args[0]].Value
-		q := M.Nodes[node.Args[1]].Value
+		p := M.Nodes[node.Args[0]].Value[0]
+		q := M.Nodes[node.Args[1]].Value[0]
 		if p > .5 && q > .5 || p < .5 && q < .5 {
-			node.Value = 1.0
+			node.Value[0] = 1.0
 		} else {
-			node.Value = 0.0
+			node.Value[0] = 0.0
 		}
 	case "noise":
-		p := M.Nodes[node.Args[0]].Value
-		q := M.Nodes[node.Args[1]].Value
-		node.Value = .5 + pnoise.At2d(10*p, 10*q)
+		p := M.Nodes[node.Args[0]].Value[0]
+		q := M.Nodes[node.Args[1]].Value[0]
+		node.Value[0] = .5 + pnoise.At2d(10*p, 10*q)
 	case "lerp":
-		t := M.Nodes[node.Args[0]].Value
-		A := M.Nodes[node.Args[1]].Value
-		B := M.Nodes[node.Args[2]].Value
-		node.Value = t*A + (1-t)*B
+		t := M.Nodes[node.Args[0]].Value[0]
+		A := M.Nodes[node.Args[1]].Value[0]
+		B := M.Nodes[node.Args[2]].Value[0]
+		node.Value[0] = t*A + (1-t)*B
 	case "if":
-		cond := M.Nodes[node.Args[0]].Value
-		_then := M.Nodes[node.Args[1]].Value
-		_else := M.Nodes[node.Args[2]].Value
+		cond := M.Nodes[node.Args[0]].Value[0]
+		_then := M.Nodes[node.Args[1]].Value[0]
+		_else := M.Nodes[node.Args[2]].Value[0]
 		if cond > .5 {
-			node.Value = _then
+			node.Value[0] = _then
 		} else {
-			node.Value = _else
+			node.Value[0] = _else
 		}
 	default:
 		msg := fmt.Sprintf("Op '%s' not implemented!", node.Op)
@@ -428,7 +428,7 @@ func (M Module) SetInputs(inputs []float64) {
 	for i := range M.Inputs {
 		k := M.Inputs[i].Idx
 		if k != -1 {
-			M.Nodes[k].Value = inputs[i]
+			M.Nodes[k].Value = []float64{inputs[i]}
 			M.Nodes[k].Ready = true
 		}
 	}
@@ -436,7 +436,7 @@ func (M Module) SetInputs(inputs []float64) {
 
 func (M Module) GetOutputs() (outputs []float64) {
 	for _, outp := range M.Outputs {
-		outputs = append(outputs, M.Nodes[outp.Idx].Value)
+		outputs = append(outputs, M.Nodes[outp.Idx].Value[0])
 	}
 	return
 }
@@ -484,10 +484,10 @@ func (M Module) EvalNodes(C *Circuit, roots ...int) {
 			node := &M.Nodes[selected[i]]
 			inputs := []float64{}
 			for _, arg := range (*node).Args {
-				inputs = append(inputs, M.Nodes[arg].Value)
+				inputs = append(inputs, M.Nodes[arg].Value[0])
 			}
 			outputs := C.EvalModule((*node).Op, inputs)
-			(*node).Value = outputs[0]
+			(*node).Value[0] = outputs[0]
 		} else {
 			M.Nodes[selected[i]].eval(M)
 		}
@@ -602,7 +602,7 @@ func (M Module) String() string {
 		s += colon
 		s += node.Op
 		if node.Op == "=" {
-			s += fmt.Sprintf(" %g", node.Value)
+			s += fmt.Sprintf(" %g", node.Value[0])
 		} else {
 			for _, arg := range node.Args {
 				s += fmt.Sprintf(" %d", arg)
@@ -638,13 +638,14 @@ func RandomModule2(inputs, outputs string, numnodes int) (M Module) {
 		M.Nodes = append(M.Nodes, &Node{
 			Op:    op,
 			Args:  args,
-			Value: val,
+			Value: []float64{val},
 		})
 	}
 	for i := range M.Inputs { // + add Input nodes at the end
 		k := len(M.Nodes)
 		M.Nodes = append(M.Nodes, &Node{
-			Op: fmt.Sprintf("%c", M.Inputs[i].Name),
+			Op:    fmt.Sprintf("%c", M.Inputs[i].Name),
+			Value: []float64{0.0},
 		})
 		M.Inputs[i].Idx = k
 	}
@@ -734,7 +735,8 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 	// Add Input nodes
 	for i := range M.Inputs {
 		M.Nodes = append(M.Nodes, &Node{
-			Op: fmt.Sprintf("%c", M.Inputs[i].Name),
+			Op:    fmt.Sprintf("%c", M.Inputs[i].Name),
+			Value: []float64{0.0},
 		})
 	}
 	// Generate nodes
@@ -753,7 +755,7 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 		M.Nodes = append(M.Nodes, &Node{
 			Op:    op,
 			Args:  args,
-			Value: val,
+			Value: []float64{val},
 		})
 		curr++
 	}
@@ -851,7 +853,10 @@ func parseModule(s string) (mod Module, err error) {
 
 		if info, ok := OperatorInfo[op]; !ok {
 			// An input or a call
-			node = &Node{Op: op}
+			node = &Node{
+				Op:    op,
+				Value: []float64{0.0},
+			}
 			k := mod.inputIndex(rune(op[0]))
 			if k != -1 { // An input
 				if mod.Inputs[k].Idx != -1 {
@@ -872,15 +877,21 @@ func parseModule(s string) (mod Module, err error) {
 		} else {
 			if op == "=" {
 				// A constant
-				node = &Node{Op: "="}
-				n, _ := fmt.Fscanf(rnod, "%f", &node.Value)
+				node = &Node{
+					Op:    "=",
+					Value: []float64{0.0},
+				}
+				n, _ := fmt.Fscanf(rnod, "%f", &node.Value[0])
 				if n != 1 {
 					err = fmt.Errorf("Error in node %d: cannot read constant", i)
 					return
 				}
 			} else {
 				// An operator
-				node = &Node{Op: op}
+				node = &Node{
+					Op:    op,
+					Value: []float64{0.0},
+				}
 				for {
 					var arg int
 					n, err := fmt.Fscanf(rnod, "%d", &arg)

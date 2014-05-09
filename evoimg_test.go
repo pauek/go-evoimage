@@ -235,11 +235,11 @@ func TestEvalNodes(t *testing.T) {
 	}
 	for x := 0.1; x < 1.0; x += .1 {
 		e.SetInputs([]float64{x, .5})
-		if e.EvalNodes(nil, 1); e.Nodes[1].Value != x {
+		if e.EvalNodes(nil, 1); e.Nodes[1].Value[0] != x {
 			t.Errorf("Node 1 in '%s' should eval to %g", e.String(), x)
 		}
 		e.SetInputs([]float64{0, x})
-		if e.EvalNodes(nil, 2); e.Nodes[2].Value != x {
+		if e.EvalNodes(nil, 2); e.Nodes[2].Value[0] != x {
 			t.Errorf("Node 2 in '%s' should eval to %g", e.String(), x)
 		}
 	}
