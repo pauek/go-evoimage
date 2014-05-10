@@ -43,7 +43,7 @@ func render(n int, expr string) {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	flag.IntVar(&Size, "s", 250, "Image size")
+	flag.IntVar(&Size, "s", 120, "Image size")
 	flag.IntVar(&Samples, "k", 1, "Number of samples per pixel")
 	flag.Parse()
 
