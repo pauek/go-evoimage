@@ -99,9 +99,8 @@ func argument(node, output int) Argument {
 
 var Unset = Argument(-1)
 
-func (A Argument) IsUnset() bool { return int(A) == -1 }
-func (A Argument) Node() int     { return int(A / 10) }
-func (A Argument) Output() int   { return int(A % 10) }
+func (A Argument) Node() int   { return int(A / 10) }
+func (A Argument) Output() int { return int(A % 10) }
 
 func (c *Color) Add(other Color) {
 	c.R += other.R
@@ -767,7 +766,7 @@ func parseModule(s string) (mod *Module, err error) {
 	// check missing nodes
 	for i, node := range mod.Nodes {
 		for j, arg := range node.Args {
-			if arg.IsUnset() {
+			if arg == Unset {
 				err = fmt.Errorf("Argument %d missing in node '%d'", j, i)
 				return
 			}
@@ -790,6 +789,36 @@ func readModule(s string) (mod *Module, err error) {
 	return
 }
 
+func RandomOperator() (op string, info OpInfo) {
+	iop := rand.Intn(len(Operators))
+	op = Operators[iop]
+	info = OperatorInfo[op]
+	return
+}
+
+func RandomNode(wConst bool) (node *Node, info OpInfo) {
+	var op string
+	for {
+		op, info = RandomOperator()
+		if op != "=" {
+			break
+		}
+		if wConst {
+			break
+		}
+	}
+	args := make([]Argument, info.Nargs)
+	for i := range args {
+		args[i] = Unset
+	}
+	node = &Node{
+		Op:    op,
+		Args:  args,
+		Value: []float64{0.0},
+	}
+	return
+}
+
 func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 	for _, c := range inputs {
 		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
@@ -807,9 +836,7 @@ func RandomModule(inputs, outputs string, numnodes int) (M Module) {
 	// Generate nodes
 	curr := len(M.Inputs)
 	for i := 0; i < numnodes; i++ {
-		iop := rand.Intn(len(Operators))
-		op := Operators[iop]
-		info := OperatorInfo[op]
+		op, info := RandomOperator()
 		args := []Argument{}
 		val := 0.0
 		if op == "=" {
@@ -950,7 +977,7 @@ func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
 }
 
 var (
-	OperatorChangeProbability = 1.0
+	OperatorChangeProbability = 0.5
 	ConnectionSwapProbability = 0.5
 )
 
@@ -999,6 +1026,25 @@ func (Q *Queue) Add(x int) {
 		Q.elems[Q.top] = x
 		Q.top++
 	}
+}
+
+func (M Module) MarkSuccessorsOf(n int) (marks []bool) {
+	marks = make([]bool, len(M.Nodes))
+	Q := NewQueue(len(M.Nodes))
+	Q.Add(n)
+	for !Q.Empty() {
+		k := Q.Curr()
+		for i := range M.Nodes {
+			for j := range M.Nodes[i].Args {
+				if M.Nodes[i].Args[j].Node() == k {
+					marks[i] = true
+					Q.Add(i)
+				}
+			}
+		}
+		Q.Next()
+	}
+	return
 }
 
 func (M Module) MarkPredecessorsOf(n int) (marks []bool) {
@@ -1071,6 +1117,44 @@ func (M *Module) MutConnectionSwap() {
 		M.TopologicalSort()
 		return
 	}
+}
+
+func (M *Module) MutInsertNode() {
+	// Choose a node+input.
+	nodes := []int{}
+	for i := range M.Nodes {
+		if len(M.Nodes[i].Args) > 0 {
+			nodes = append(nodes, i)
+		}
+	}
+	chosen := nodes[rand.Intn(len(nodes))]
+	cargs := M.Nodes[chosen].Args
+	chosenarg := rand.Intn(len(cargs))
+
+	// create a new node and put it in the middle
+	inew := len(M.Nodes)
+	node, info := RandomNode(false)
+	input := rand.Intn(info.Nargs)
+	node.Args[input] = M.Nodes[chosen].Args[chosenarg]
+	M.Nodes[chosen].Args[chosenarg] = argument(inew, 0)
+
+	// fill in other arguments
+	for i := range node.Args {
+		if node.Args[i] == Unset {
+			succ := M.MarkSuccessorsOf(inew)
+			candidates := []int{}
+			for i := range succ {
+				if !succ[i] {
+					candidates = append(candidates, i)
+				}
+			}
+			chosen := candidates[rand.Intn(len(candidates))]
+			node.Args[i] = argument(chosen, 0)
+		}
+	}
+
+	M.Nodes = append(M.Nodes, node)
+	M.TopologicalSort()
 }
 
 func (M *Module) MutOperatorChange() {
@@ -1187,7 +1271,7 @@ func RandomCircuit(numnodes int) (C Circuit) {
 }
 
 func (C Circuit) Mutate() {
-	C.Modules[""].MutConnectionSwap()
+	C.Modules[""].MutInsertNode()
 }
 
 func (C Circuit) String() (s string) {
