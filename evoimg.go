@@ -1,6 +1,7 @@
 package evoimage
 
 import (
+	"bytes"
 	"fmt"
 	"go-evoimage/perlin"
 	"image"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"text/template"
 	"time"
 )
 
@@ -999,7 +1001,7 @@ func (Q *Queue) Add(x int) {
 	}
 }
 
-func (M Module) MarkInputsOf(n int) (marks []bool) {
+func (M Module) MarkPredecessorsOf(n int) (marks []bool) {
 	marks = make([]bool, len(M.Nodes))
 	Q := NewQueue(len(M.Nodes))
 	Q.Add(n)
@@ -1023,8 +1025,7 @@ func swap(a, b *Argument) {
 }
 
 func (M *Module) MutConnectionSwap() {
-
-	for tries := 3; tries > 0; tries-- {
+	for tries := 5; tries > 0; tries-- {
 		// escoger al azar 2 links
 		links1 := []Link{}
 		for i := range M.Nodes {
@@ -1038,11 +1039,17 @@ func (M *Module) MutConnectionSwap() {
 		}
 		L1 := links1[rand.Intn(sz1)]
 
-		marks := M.MarkInputsOf(L1.Node)
+		predL1 := M.MarkPredecessorsOf(L1.Node)
 
 		links2 := []Link{}
 		for i := range M.Nodes {
-			if marks[i] { // avoid predecessors of L1.Node to avoid creating loops
+			// avoid predecessors of L1.Node to avoid creating loops
+			if predL1[i] {
+				continue
+			}
+			// avoid nodes that have L1 as predecessor
+			predI := M.MarkPredecessorsOf(i)
+			if predI[L1.Node] {
 				continue
 			}
 			for j := range M.Nodes[i].Args {
@@ -1258,6 +1265,19 @@ func Read(s string) (C Circuit, err error) {
 	return
 }
 
+var nodeLabelTmpl = template.Must(template.New("").Parse(`
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+<TR>
+{{ range $i, $v := .inputs }}
+   <TD port="i{{$i}}"><font point-size="7">{{$i}}</font></TD>{{end}}
+</TR>
+<TR><TD CELLPADDING="10" COLSPAN="{{.span}}">{{.name}}</TD></TR>
+<TR>
+{{ range $i, $v := .outputs }}
+   <TD port="o{{$i}}"><font point-size="7">{{$i}}</font></TD>{{ end }}
+</TR>
+</TABLE>`))
+
 func (C Circuit) Graphviz(w io.Writer) {
 	fmt.Fprintf(w, "digraph Circuit {\n")
 	for name, mod := range C.Modules {
@@ -1279,8 +1299,11 @@ func (C Circuit) Graphviz(w io.Writer) {
 		fmt.Fprintf(w, "      { rank = same;\n")
 		for i, _ := range mod.Outputs {
 			k := len(mod.Nodes) + i
-			fmt.Fprintf(w, "      %d [label=\"%c\",shape=square,style=filled];\n",
-				k, mod.Outputs[i].Name)
+			sty := ""
+			sty += fmt.Sprintf(`label="%c",`, mod.Outputs[i].Name)
+			sty += `shape=square,`
+			sty += `style=filled`
+			fmt.Fprintf(w, "      %d [%s];\n", k, sty)
 		}
 		fmt.Fprintf(w, "      }\n")
 
@@ -1290,24 +1313,39 @@ func (C Circuit) Graphviz(w io.Writer) {
 				continue
 			}
 			if node.Op == "=" {
-				fmt.Fprintf(w, `      %d [label="%.2f",shape=diamond,style=filled,color="#99aaff"]`,
-					i, node.Value)
+				sty := ""
+				sty += fmt.Sprintf(`label="%.2f",`, node.Value)
+				sty += `shape=circle,`
+				sty += `width=.5,`
+				sty += `style=filled,`
+				sty += `color="#99aaff"`
+				fmt.Fprintf(w, "      %d [%s];\n", i, sty)
 			} else {
-				fmt.Fprintf(w, `      %d [label="%s"];`, i, node.Op)
+				var buf bytes.Buffer
+				span := len(node.Args)
+				if len(node.Value) > span {
+					span = len(node.Value)
+				}
+				nodeLabelTmpl.Execute(&buf, map[string]interface{}{
+					"name":    node.Op,
+					"inputs":  node.Args,
+					"outputs": node.Value,
+					"span":    span,
+				})
+				fmt.Fprintf(w, "      %d [label=<%s>,shape=none];\n", i, buf.String())
 			}
-			fmt.Fprintln(w)
 		}
 
 		// Links
 		for i, node := range mod.Nodes {
-			for _, arg := range node.Args {
-				fmt.Fprintf(w, `      %d -> %d;`, arg.Node(), i)
+			for j, arg := range node.Args {
+				fmt.Fprintf(w, `      %d:o%d -> %d:i%d;`, arg.Node(), arg.Output(), i, j)
 				fmt.Fprintln(w)
 			}
 		}
 		for i, out := range mod.Outputs {
 			k := len(mod.Nodes) + i
-			fmt.Fprintf(w, "      %d -> %d;\n", out.Idx, k)
+			fmt.Fprintf(w, "      %d:o0 -> %d;\n", out.Idx, k)
 		}
 		fmt.Fprintf(w, "   }\n")
 	}
