@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -977,8 +978,10 @@ func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
 }
 
 var (
-	OperatorChangeProbability = 0.5
-	ConnectionSwapProbability = 0.5
+	OperatorChangeProbability = 0.25
+	ConnectionSwapProbability = 0.25
+	InsertNodeProbability     = 0.25
+	RemoveNodeProbability     = 0.25
 )
 
 func (M *Module) Mutate() {
@@ -990,6 +993,14 @@ func (M *Module) Mutate() {
 	r -= ConnectionSwapProbability
 	if r < 0 {
 		M.MutConnectionSwap()
+	}
+	r -= InsertNodeProbability
+	if r < 0 {
+		M.MutInsertNode()
+	}
+	r -= RemoveNodeProbability
+	if r < 0 {
+		M.MutRemoveNode()
 	}
 }
 
@@ -1117,6 +1128,59 @@ func (M *Module) MutConnectionSwap() {
 		M.TopologicalSort()
 		return
 	}
+}
+
+func (M *Module) MutRemoveNode() {
+	uses := make([]int, len(M.Nodes))
+	for i := range M.Nodes {
+		for _, a := range M.Nodes[i].Args {
+			uses[a.Node()]++
+		}
+	}
+	// Candidates are nodes with at least one input
+	// in which at most one input has only one user
+	candidates := []int{}
+	for i := range M.Nodes {
+		nonexcl := 0
+		for _, a := range M.Nodes[i].Args {
+			if uses[a.Node()] > 1 {
+				nonexcl++
+			}
+		}
+		nargs := len(M.Nodes[i].Args)
+		if nargs > 0 && nonexcl >= nargs-1 {
+			candidates = append(candidates, i)
+		}
+	}
+	// Chose candidate + input
+	chosen := candidates[rand.Intn(len(candidates))]
+	choseninp := -1
+	for j, a := range M.Nodes[chosen].Args {
+		if uses[a.Node()] == 1 {
+			choseninp = j
+		}
+	}
+	nargs := len(M.Nodes[chosen].Args)
+	if choseninp == -1 {
+		choseninp = rand.Intn(nargs)
+	}
+	inp := M.Nodes[chosen].Args[choseninp]
+	fmt.Fprintln(os.Stderr, chosen, choseninp, inp)
+
+	// Reconnect one input to the output
+	for i := range M.Nodes {
+		for j, a := range M.Nodes[i].Args {
+			if a.Node() == chosen {
+				M.Nodes[i].Args[j] = inp
+			}
+		}
+	}
+	for i := range M.Outputs {
+		if M.Outputs[i].Idx == chosen {
+			M.Outputs[i].Idx = inp.Node()
+		}
+	}
+	M.TreeShake()
 }
 
 func (M *Module) MutInsertNode() {
@@ -1271,7 +1335,7 @@ func RandomCircuit(numnodes int) (C Circuit) {
 }
 
 func (C Circuit) Mutate() {
-	C.Modules[""].MutInsertNode()
+	C.Modules[""].MutRemoveNode()
 }
 
 func (C Circuit) String() (s string) {
