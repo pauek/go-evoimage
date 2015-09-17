@@ -1,1 +1,0 @@
-(rgb)(xyrt)[r:tri 40|b:noise 50 60|g:noise 30 80|noise 80 70|band 70|sin 90|+ 100 70|x|y|r|t]

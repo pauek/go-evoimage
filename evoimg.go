@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -820,51 +819,7 @@ func RandomNode(wConst bool) (node *Node, info OpInfo) {
 	return
 }
 
-func RandomModule(inputs, outputs string, numnodes int) (M Module) {
-	for _, c := range inputs {
-		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
-	}
-	for _, c := range outputs {
-		M.Outputs = append(M.Outputs, Port{Name: c, Idx: -1})
-	}
-	// Add Input nodes
-	for i := range M.Inputs {
-		M.Nodes = append(M.Nodes, &Node{
-			Op:    fmt.Sprintf("%c", M.Inputs[i].Name),
-			Value: []float64{0.0},
-		})
-	}
-	// Generate nodes
-	curr := len(M.Inputs)
-	for i := 0; i < numnodes; i++ {
-		op, info := RandomOperator()
-		args := []Argument{}
-		val := 0.0
-		if op == "=" {
-			val = rand.Float64()
-		} else {
-			for _, a := range rand.Perm(curr)[:info.Nargs] {
-				args = append(args, argument(a, 0))
-			}
-		}
-		M.Nodes = append(M.Nodes, &Node{
-			Op:    op,
-			Args:  args,
-			Value: []float64{val},
-		})
-		curr++
-	}
-	// Assign outputs
-	for i := range M.Outputs {
-		M.Outputs[i].Idx = rand.Intn(curr)
-	}
-	M.reconstructInputs()
-	M.TopologicalSort()
-	M.TreeShake()
-	return
-}
-
-func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
+func RandomModule(inputs, outputs string, numnodes int) (M *Module) {
 	M = &Module{}
 	for _, c := range inputs {
 		M.Inputs = append(M.Inputs, Port{Name: c, Idx: -1})
@@ -928,31 +883,36 @@ func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
 
 		if r >= ninputs {
 			// assign to output
+			done := false
 			r -= ninputs
 			for j := range M.Outputs {
 				if M.Outputs[j].Idx == -1 {
 					if r--; r < 0 {
 						M.Outputs[j].Idx = i
-						goto done
+						done = true
 					}
 				}
 			}
-			panic("unreachable1")
+			if !done {
+				panic("didn't assign to output!")
+			}
 		} else {
 			// assign to input of other node
+			done := false
 			for j := 0; j < i; j++ {
 				for k := range M.Nodes[j].Args {
 					if M.Nodes[j].Args[k] == -1 {
 						if r--; r < 0 {
 							M.Nodes[j].Args[k] = argument(i, 0)
-							goto done
+							done = true
 						}
 					}
 				}
 			}
-			panic("didn't assign output!")
+			if !done {
+				panic("didn't assign input of other node!")
+			}
 		}
-	done:
 	}
 
 	// 3) Assign at random the remaining links
@@ -974,7 +934,7 @@ func RandomModule2(inputs, outputs string, numnodes int) (M *Module) {
 	M.reconstructInputs()
 	M.TopologicalSort()
 	M.TreeShake()
-	return
+	return M
 }
 
 var (
@@ -1165,7 +1125,6 @@ func (M *Module) MutRemoveNode() {
 		choseninp = rand.Intn(nargs)
 	}
 	inp := M.Nodes[chosen].Args[choseninp]
-	fmt.Fprintln(os.Stderr, chosen, choseninp, inp)
 
 	// Reconnect one input to the output
 	for i := range M.Nodes {
@@ -1320,7 +1279,7 @@ func (C Circuit) Render(size, samples int) image.Image {
 	return img
 }
 
-func (C Circuit) Clone() (newC Circuit) {
+func (C *Circuit) Clone() (newC Circuit) {
 	newC.Modules = make(map[string]*Module)
 	for name, mod := range C.Modules {
 		newC.Modules[name] = mod.Clone()
@@ -1328,14 +1287,15 @@ func (C Circuit) Clone() (newC Circuit) {
 	return
 }
 
-func RandomCircuit(numnodes int) (C Circuit) {
+func RandomCircuit(numnodes int) (C *Circuit) {
+	C = &Circuit{}
 	C.Modules = make(map[string]*Module)
-	C.Modules[""] = RandomModule2("xyrt", "rgb", numnodes)
+	C.Modules[""] = RandomModule("xyrt", "rgb", numnodes)
 	return C
 }
 
-func (C Circuit) Mutate() {
-	C.Modules[""].MutRemoveNode()
+func (C *Circuit) Mutate() {
+	C.Modules[""].Mutate()
 }
 
 func (C Circuit) String() (s string) {

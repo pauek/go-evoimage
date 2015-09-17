@@ -1,1 +1,0 @@
-(rgb)(xyrt)[g:x2 10|min 50 20|max 30 70|r:/ 40 60|inv 90|b:sin 80|x|y|r|t]

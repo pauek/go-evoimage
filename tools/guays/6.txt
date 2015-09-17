@@ -1,1 +1,0 @@
-(rgb)(xyrt)[g:cos 1|* 3 2|cos 4|b:if 7 5 18|or 6 26|sin 8|bw 9|inv 11|or 22 10|not 10|* 30 14|+ 12 13|inv 17|cos 18|if 27 19 31|r:lerp 25 16 21|band 24|+ 28 23|id 20|* 20 25|if 27 29 25|not 27|lerp 31 25 26|band 25|bw 27|cos 28|* 29 28|not 29|r|t|x|y]

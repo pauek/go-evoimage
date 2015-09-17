@@ -1,1 +1,0 @@
-(rgb)(xyrt)[g:lerp 5 27 1|* 23 2|* 8 3|+ 6 18|b:id 9|+ 15 11|xor 24 7|+ 28 12|not 13|lerp 23 25 16|r:band 14|id 17|and 18 19|and 21 25|+ 19 22|band 23|not 18|not 20|sin 29|id 26|id 29|sin 29|bw 28|id 30|cos 29|and 28 30|y|= 0.9706756261264999|x|t|r]

@@ -1,1 +1,0 @@
-(rgb)(xyrt)[g:+ 1 18|lerp 2 13 4|id 4|b:* 12 6|if 14 9 13|r:inv 7|bw 8|xor 12 10|inv 11|or 18 12|cos 14|and 13 13|cos 13|sin 15|if 18 16 17|t|x|y|r]
